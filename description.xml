@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<description xmlns="http://openoffice.org/extensions/description/2006" xmlns:d="http://openoffice.org/extensions/description/2006" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <version value="0.1"/>
+  <identifier value="se.commonsmachinery.extensions.paste_with_credit"/>
+  <platform value="all"/>
+  <dependencies>
+    <OpenOffice.org-minimal-version value="3.3" d:name="OpenOffice.org 3.3"/>
+  </dependencies>
+  <display-name>
+    <name lang="en">Paste with credit</name>
+  </display-name>
+</description>
