@@ -2,6 +2,40 @@
 <oor:component-data xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" oor:name="Addons" oor:package="org.openoffice.Office">
   <node oor:name="AddonUI">
     <!--
+      Menu merge
+    -->
+    <node oor:name="OfficeMenuBarMerging">
+      <node oor:name="se.commonsmachinery.extensions.paste_with_credit" oor:op="replace">
+        <node oor:name="M1" oor:op="replace">
+          <prop oor:name="MergePoint">
+            <value>.uno:EditMenu\.uno:Paste</value>
+          </prop>
+          <prop oor:name="MergeCommand">
+            <value>AddAfter</value>
+          </prop>
+          <prop oor:name="MergeFallback">
+            <value>AddPath</value>
+          </prop>
+          <prop oor:name="MergeContext">
+            <value>com.sun.star.text.TextDocument</value>
+          </prop>
+          <node oor:name="MenuItems">
+            <node oor:name="I1" oor:op="replace">
+              <prop oor:name="URL">
+                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteJob?execute</value>
+              </prop>
+              <prop oor:name="Title">
+                <value xml:lang="en">~Paste with credit</value>
+              </prop>
+              <prop oor:name="Context" oor:type="xs:string">
+                <value>com.sun.star.text.TextDocument</value>
+              </prop>
+            </node>
+          </node>
+        </node>
+      </node>
+    </node>
+    <!--
       Toolbar merge
     -->
     <node oor:name="OfficeToolbarMerging">
