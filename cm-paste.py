@@ -8,23 +8,65 @@
 #
 # Distributed under an GPLv2 license, please see LICENSE in the top dir.
 
-from RDFMetadata import parser
-from RDFMetadata import vocab
+import libcredit
 from xml.dom import minidom
 
 import uno
 import unohelper
 
 from com.sun.star.task import XJobExecutor
+from com.sun.star.text.ControlCharacter import PARAGRAPH_BREAK
 
-license_labels = {
-    "http://creativecommons.org/licenses/by/3.0/": "CC BY 3.0",
-    "http://creativecommons.org/licenses/by-nc/3.0/": "CC BY-NC 3.0",
-    "http://creativecommons.org/licenses/by-nc-nd/3.0/": "CC BY-NC-ND 3.0",
-    "http://creativecommons.org/licenses/by-nc-sa/3.0/": "CC BY-NC-SA 3.0",
-    "http://creativecommons.org/licenses/by-nd/3.0/": "CC BY-ND 3.0",
-    "http://creativecommons.org/licenses/by-sa/3.0/": "CC BY-SA 3.0",
-}
+class LOCreditFormatter(libcredit.CreditFormatter):
+    """
+    Credit writer that adds text to LibreOffice writer document using UNO. 
+    """
+    def __init__(self, text, cursor):
+        self.text = text
+        self.cursor = cursor
+        self.cursor.collapseToEnd()
+
+    def begin(self):
+        pass
+
+    def end(self):
+        pass
+
+    def begin_sources(self, label=None):
+        self.add_text(" " + label)
+        self.text.insertControlCharacter(self.cursor, PARAGRAPH_BREAK, 0)
+
+    def end_sources(self):
+        pass
+
+    def begin_source(self):
+        pass
+
+    def end_source(self):
+        self.text.insertControlCharacter(self.cursor, PARAGRAPH_BREAK, 0)
+
+    def add_title(self, text, url=None):
+        self.add_url(text, url)
+
+    def add_attrib(self, text, url=None):
+        self.add_url(text, url)
+
+    def add_license(self, text, url=None):
+        self.add_url(text, url)
+
+    def add_text(self, text):
+        self.text.insertString(self.cursor, text, False)
+
+    def add_url(self, text, url=None):
+        if url:
+            length = len(text)
+            self.text.insertString(self.cursor, text, False)
+            self.cursor.goLeft (length, False)
+            self.cursor.goRight (length, True)
+            self.cursor.setPropertyValue ("HyperLinkURL", url)
+            self.cursor.goRight (length, False)
+        else:
+            self.add_text(text)
 
 class PasteJob(unohelper.Base, XJobExecutor):
     def __init__(self, ctx):
@@ -43,9 +85,7 @@ class PasteJob(unohelper.Base, XJobExecutor):
             rdf_clip = next(d for d in data_flavors if d.MimeType == "application/rdf+xml")
             rdf = clip.getContents().getTransferData(rdf_clip).value.decode('utf-16')
 
-            doc = minidom.parseString(rdf)
-            rdfs = doc.getElementsByTagNameNS("http://www.w3.org/1999/02/22-rdf-syntax-ns#", 'RDF')
-            root = next(parser.parse_RDFXML(doc=doc, root_element=r) for r in rdfs)
+            credit = libcredit.Credit(rdf)
 
             # access the current writer document
             desktop = self.ctx.ServiceManager.createInstanceWithContext(
@@ -67,11 +107,15 @@ class PasteJob(unohelper.Base, XJobExecutor):
             last_obj = graphics_access.getByName(last_name)
 
             # create the caption in the paragraph after image
-            cursor = text.createTextCursorByRange(last_obj.getAnchor())
-            cursor.gotoNextParagraph(False)
+            #cursor = text.createTextCursorByRange(last_obj.getAnchor())
+            #cursor.gotoNextParagraph(False)
+            view_cursor = controller.getViewCursor()
+            cursor = view_cursor.getText().createTextCursorByRange(view_cursor)
+            cursor.gotoStartOfSentence(False)
+            cursor.gotoEndOfSentence(True)
 
-            credit = self.get_credit_string(root)
-            text.insertString(cursor, credit, 0)
+            credit_writer = LOCreditFormatter(text, cursor)
+            credit.format(credit_writer)
         else:
             # access the current writer document
             desktop = self.ctx.ServiceManager.createInstanceWithContext(
@@ -83,50 +127,6 @@ class PasteJob(unohelper.Base, XJobExecutor):
             dispatch_helper = self.ctx.ServiceManager.createInstance(
                 "com.sun.star.frame.DispatchHelper"); 
             dispatch_helper.executeDispatch(controller, ".uno:Paste", "", 0, tuple())            
-
-
-    def get_credit_string(self, root):
-        # working with default resource for now
-        default_res = root.resource_nodes['']
-
-        title = self.get_any_resource(default_res, [
-            vocab.dc.title,
-        ])
-        if title is not None:
-            title = title.value
-        else:
-            title = "Image"
-
-        author = self.get_any_resource(default_res, [
-            vocab.dc.creator,
-            vocab.cc.attributionName,
-        ])
-        if author is not None:
-            author = " by " + author.value
-        else:
-            author = ""
-        
-        license = self.get_any_resource(default_res, [
-            vocab.xhtml.license,
-            vocab.dcterms.license,
-            vocab.cc.license,
-        ])
-        if license is not None:
-            if license.uri in license_labels:
-                license = " Licensed under " + license_labels[license.uri]
-            else:
-                license = " Licensed under " + license.uri
-        else:
-            license = ""
-
-        credit = title + author + "." + license
-        return credit
-
-    def get_any_resource(self, resource, terms):
-        for t in terms:
-            for p in resource.predicates:
-                if p.uri == t.qname:
-                    return p.object
 
 
 g_ImplementationHelper = unohelper.ImplementationHelper()
