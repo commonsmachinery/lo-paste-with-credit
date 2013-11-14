@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# vocab - definitions and human-readable names for metadata terms
+# lo-paste-with-credit - LibreOffice extensions for pasting images with metadata
 #
 # Copyright 2013 Commons Machinery http://commonsmachinery.se/
 #
@@ -15,20 +15,23 @@ import uno
 import unohelper
 
 from com.sun.star.awt import Size
+from com.sun.star.awt import Point
 from com.sun.star.task import XJobExecutor
 from com.sun.star.beans import PropertyValue
 from com.sun.star.text.ControlCharacter import PARAGRAPH_BREAK
 from com.sun.star.text.TextContentAnchorType import AS_CHARACTER
 from com.sun.star.text.TextContentAnchorType import AT_PARAGRAPH
+from com.sun.star.container import NoSuchElementException
 
 class LOCreditFormatter(libcredit.CreditFormatter):
     """
-    Credit writer that adds text to LibreOffice writer document using UNO. 
+    Credit writer that adds text to LibreOffice writer document using UNO.
     """
-    def __init__(self, text, cursor):
+    def __init__(self, text, cursor, hyperlinks=True):
         self.text = text
         self.cursor = cursor
         self.cursor.collapseToEnd()
+        self.hyperlinks = hyperlinks
 
     def begin(self):
         pass
@@ -65,18 +68,108 @@ class LOCreditFormatter(libcredit.CreditFormatter):
         if url:
             length = len(text)
             self.text.insertString(self.cursor, text, False)
-            self.cursor.goLeft (length, False)
-            self.cursor.goRight (length, True)
-            self.cursor.setPropertyValue ("HyperLinkURL", url)
-            self.cursor.goRight (length, False)
+            self.cursor.goLeft(length, False)
+            self.cursor.goRight(length, True)
+            if self.hyperlinks:
+                self.cursor.setPropertyValue("HyperLinkURL", url)
+            self.cursor.goRight(length, False)
         else:
             self.add_text(text)
 
-class PasteJob(unohelper.Base, XJobExecutor):
+class PasteWithCreditJob(unohelper.Base, XJobExecutor):
     def __init__(self, ctx):
         self.ctx = ctx
 
     def trigger(self, args):
+        desktop = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.frame.Desktop", self.ctx)
+
+        model = desktop.getCurrentComponent()
+        controller = model.getCurrentController()
+
+        image_with_metadata = self._get_image_with_metadata()
+        if not image_with_metadata:
+            # just paste whatever is in clipboard
+            dispatch_helper = self.ctx.ServiceManager.createInstance(
+                "com.sun.star.frame.DispatchHelper");
+            dispatch_helper.executeDispatch(controller, ".uno:Paste", "", 0, tuple())
+            return
+
+        rdf, descriptor, graphic = image_with_metadata
+        img_size = descriptor.getPropertyValue("SizePixel")
+
+        if model.supportsService("com.sun.star.text.TextDocument"):
+            # create a frame to hold the image with caption
+            text_frame = model.createInstance("com.sun.star.text.TextFrame")
+            text_frame.setSize(Size(15000,400))
+            text_frame.setPropertyValue("AnchorType", AT_PARAGRAPH)
+
+            # duplicate current cursor
+            view_cursor = controller.getViewCursor()
+            cursor = view_cursor.getText().createTextCursorByRange(view_cursor)
+            cursor.gotoStartOfSentence(False)
+            cursor.gotoEndOfSentence(True)
+
+            # insert text frame
+            text = model.Text
+            text.insertTextContent(cursor, text_frame, 0)
+            frame_text = text_frame.getText()
+
+            # create a TextGraphicObject to hold the image
+            image = model.createInstance("com.sun.star.text.TextGraphicObject")
+            image.setPropertyValue("Graphic", graphic)
+            # hack to enlarge the tiny pasted images
+            image.setPropertyValue("Width", img_size.Width * 20)
+            image.setPropertyValue("Height", img_size.Height * 20)
+
+            # add the image to the text frame
+            cursor = frame_text.createTextCursor()
+            frame_text.insertTextContent(cursor, image, False)
+            cursor.gotoNextParagraph(False)
+
+            # add the credit as text below the image
+            credit = libcredit.Credit(rdf)
+            credit_writer = LOCreditFormatter(frame_text, cursor)
+            credit.format(credit_writer)
+
+            # scale the image to fit the frame
+            image.setPropertyValue("RelativeWidth", 100)
+            #image.setPropertyValue("RelativeHeight", 100)
+            image.setPropertyValue("IsSyncHeightToWidth", True)
+
+            # set image title (no sources)
+            credit_writer = libcredit.TextCreditFormatter()
+            credit.format(credit_writer, source_depth=0)
+            image.setPropertyValue("Title", credit_writer.get_text())
+
+            # set image title (credit with sources)
+            credit_writer = libcredit.TextCreditFormatter()
+            credit.format(credit_writer)
+            image.setPropertyValue("Description", credit_writer.get_text())
+        elif model.supportsService("com.sun.star.presentation.PresentationDocument"):
+            page = controller.getCurrentPage()
+
+            # begin pasting
+            shape = model.createInstance("com.sun.star.drawing.GraphicObjectShape")
+            shape.Graphic = graphic
+            shape.setSize(Size(img_size.Width * 20, img_size.Height * 20))
+
+            page.add(shape)
+
+            attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
+            attr.Value = rdf
+            attributes = shape.UserDefinedAttributes
+            attributes.insertByName("cm-metadata", attr)
+            shape.UserDefinedAttributes = attributes
+
+            size = shape.Size
+            shape.setPosition(Point(
+                int((page.Width - size.Width) / 2),
+                int((page.Height - size.Height) / 2))
+            )
+
+    # returns a tuple consisting of (str, GraphicDescriptor, Graphic) or None
+    def _get_image_with_metadata(self):
         clip = self.ctx.ServiceManager.createInstanceWithContext(
             "com.sun.star.datatransfer.clipboard.SystemClipboard", self.ctx)
 
@@ -85,58 +178,15 @@ class PasteJob(unohelper.Base, XJobExecutor):
         mimeTypes = [d.MimeType for d in data_flavors]
 
         if "image/png" in mimeTypes and "application/rdf+xml" in mimeTypes:
-            # if both image and RDF reside in clipboard, it's likely our cause
             rdf_clip = next(d for d in data_flavors if d.MimeType == "application/rdf+xml")
-            rdf = clip.getContents().getTransferData(rdf_clip).value.decode('utf-16')
+            rdf = clip.getContents().getTransferData(rdf_clip).value.decode("utf-16")
 
             img_clip = next(d for d in data_flavors if d.MimeType == "image/png")
-            img_byteseq = clip.getContents().getTransferData(img_clip)
+            img = clip.getContents().getTransferData(img_clip)
 
-            credit = libcredit.Credit(rdf)
-
-            # access the current writer document
-            desktop = self.ctx.ServiceManager.createInstanceWithContext(
-                "com.sun.star.frame.Desktop", self.ctx)
-
-            model = desktop.getCurrentComponent()
-            controller = model.getCurrentController()
-            text = model.Text
-
-            """
-            # paste image - hack, the api should be used here instead of .uno
-            dispatch_helper = self.ctx.ServiceManager.createInstance(
-                "com.sun.star.frame.DispatchHelper"); 
-            dispatch_helper.executeDispatch(controller, ".uno:Paste", "", 0, tuple())
-            dispatch_helper.executeDispatch(controller, ".uno:Escape", "", 0, tuple())
-
-            # find the newly pasted image (last in line)
-            graphics_access = model.getGraphicObjects()
-            last_name = graphics_access.getElementNames()[-1]
-            last_obj = graphics_access.getByName(last_name)
-            """
-
-            # create the caption in the paragraph after image
-            #cursor = text.createTextCursorByRange(last_obj.getAnchor())
-            #cursor.gotoNextParagraph(False)
-            view_cursor = controller.getViewCursor()
-            cursor = view_cursor.getText().createTextCursorByRange(view_cursor)
-            cursor.gotoStartOfSentence(False)
-            cursor.gotoEndOfSentence(True)
-
-            #credit_writer = LOCreditFormatter(text, cursor)
-            #credit.format(credit_writer)
-
-            text_frame = model.createInstance("com.sun.star.text.TextFrame")
-            text_frame.setSize( Size(15000,400))
-            text_frame.setPropertyValue("AnchorType", AT_PARAGRAPH)
-
-            text.insertTextContent(cursor, text_frame, 0)
-            frame_text = text_frame.getText()
-
-            # create the image directly from clipboard data instead of .uno:Paste
             img_stream = self.ctx.ServiceManager.createInstanceWithContext(
                 "com.sun.star.io.SequenceInputStream", self.ctx)
-            img_stream.initialize((img_byteseq,))
+            img_stream.initialize((img,))
             graphic_provider = self.ctx.ServiceManager.createInstanceWithContext(
                 "com.sun.star.graphic.GraphicProvider", self.ctx)
 
@@ -144,56 +194,83 @@ class PasteJob(unohelper.Base, XJobExecutor):
             stream_property.Name = "InputStream"
             stream_property.Value = img_stream
 
-            graphic_descriptor = graphic_provider.queryGraphicDescriptor((stream_property,))
+            descriptor = graphic_provider.queryGraphicDescriptor((stream_property,))
             graphic = graphic_provider.queryGraphic((stream_property,))
-            size = graphic_descriptor.getPropertyValue("SizePixel")
+            #size = descriptor.getPropertyValue("SizePixel")
+            return (rdf, descriptor, graphic)
 
-            image = model.createInstance('com.sun.star.text.TextGraphicObject')
-            image.setPropertyValue("Graphic", graphic)
-            # a hack to enlarge the tiny pasted images
-            image.setPropertyValue("Width", size.Width * 20)
-            image.setPropertyValue("Height", size.Height * 20)
+        return None
 
-            cursor = frame_text.createTextCursor() # FIXME: should use the real cursor here
-            frame_text.insertTextContent(cursor, image, False)
-            cursor.gotoNextParagraph(False)
+class InsertCreditsJob(unohelper.Base, XJobExecutor):
+    def __init__(self, ctx):
+        self.ctx = ctx
 
-            credit_writer = LOCreditFormatter(frame_text, cursor)
-            credit.format(credit_writer)
+    def trigger(self, args):
+        # access the current writer document
+        desktop = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.frame.Desktop", self.ctx)
 
-            image.setPropertyValue("RelativeWidth", 100)
-            #image.setPropertyValue("RelativeHeight", 100)
-            image.setPropertyValue("IsSyncHeightToWidth", True)
+        model = desktop.getCurrentComponent()
+        controller = model.getCurrentController()
+        presentation = model.Presentation
 
-            # set image description
-            credit_writer = libcredit.TextCreditFormatter()
-            credit.format(credit_writer, source_depth=0)
-            image.setPropertyValue("Title", credit_writer.get_text())
+        pages = model.getDrawPages()
+        credits = []
+        for page_num in range(pages.getCount()):
+            page = pages.getByIndex(page_num)
+            for shape_num in range(page.getCount()):
+                shape = page.getByIndex(shape_num)
+                try:
+                    rdf = shape.UserDefinedAttributes.getByName("cm-metadata").Value
+                    credit = libcredit.Credit(rdf)
+                    credits.append(credit)
+                except NoSuchElementException:
+                    pass
 
-            credit_writer = libcredit.TextCreditFormatter()
-            credit.format(credit_writer)
-            image.setPropertyValue("Description", credit_writer.get_text())
-        else:
-            # access the current writer document
-            desktop = self.ctx.ServiceManager.createInstanceWithContext(
-                "com.sun.star.frame.Desktop", self.ctx)
+        # create a TextShape with credits on the current page
+        page = controller.getCurrentPage()
+        shape = model.createInstance("com.sun.star.drawing.TextShape")
+        shape.TextAutoGrowHeight = True
+        shape.TextAutoGrowWidth = True
 
-            model = desktop.getCurrentComponent()
-            controller = model.getCurrentController()
-            # just paste whatever is in clipboard
-            dispatch_helper = self.ctx.ServiceManager.createInstance(
-                "com.sun.star.frame.DispatchHelper"); 
-            dispatch_helper.executeDispatch(controller, ".uno:Paste", "", 0, tuple())            
+        page.add(shape)
 
+        text = shape.Text
+        cursor = text.createTextCursor()
+        text.insertString(cursor, "This presentation includes the following works:", 0)
+        text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
+        text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
+        cursor.gotoEnd(False)
+
+        for credit in credits:
+            # in Impress cursor seems to support com.sun.star.style.CharacterProperties
+            # but trying to set HyperLinkURL property raises an UnknownPropertyException
+            # so let's just disable hyperlinks for now
+            tf = LOCreditFormatter(text, cursor, hyperlinks=False)
+            credit.format(tf, source_depth=0)
+            text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
+
+        size = shape.Size
+        shape.setPosition(Point(
+            int((page.Width - size.Width) / 2),
+            int((page.Height - size.Height) / 2))
+        )
 
 g_ImplementationHelper = unohelper.ImplementationHelper()
 
+# job class as defined in the .xcu
 g_ImplementationHelper.addImplementation(
-    PasteJob,
-    "se.commonsmachinery.extensions.paste_with_credit.PasteJob", # as defined in the .xcu
+    PasteWithCreditJob,
+    "se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob",
     ("com.sun.star.task.Job",)
 )
 
+# job class as defined in the .xcu
+g_ImplementationHelper.addImplementation(
+    InsertCreditsJob,
+    "se.commonsmachinery.extensions.paste_with_credit.InsertCreditsJob",
+    ("com.sun.star.task.Job",)
+)
 
 if __name__ == "__main__":
     localContext = uno.getComponentContext()
@@ -205,7 +282,7 @@ if __name__ == "__main__":
     ctx = resolver.resolve("uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
     smgr = ctx.ServiceManager
 
-    job = PasteJob(ctx)
+    job = PasteWithCreditJob(ctx)
     job.trigger(None)
 
     # Python-UNO bridge workaround: call a synchronous method, before the python

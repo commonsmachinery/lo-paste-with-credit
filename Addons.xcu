@@ -18,17 +18,30 @@
           </prop>
           <prop oor:name="MergeContext">
             <value>com.sun.star.text.TextDocument</value>
+            <value>com.sun.star.presentation.PresentationDocument</value>
           </prop>
           <node oor:name="MenuItems">
             <node oor:name="I1" oor:op="replace">
               <prop oor:name="URL">
-                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteJob?execute</value>
+                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
                 <value xml:lang="en">~Paste with credit</value>
               </prop>
               <prop oor:name="Context" oor:type="xs:string">
                 <value>com.sun.star.text.TextDocument</value>
+                <value>com.sun.star.presentation.PresentationDocument</value>
+              </prop>
+            </node>
+            <node oor:name="I2" oor:op="replace">
+              <prop oor:name="URL">
+                <value>service:se.commonsmachinery.extensions.paste_with_credit.InsertCreditsJob?execute</value>
+              </prop>
+              <prop oor:name="Title">
+                <value xml:lang="en">~Insert credits</value>
+              </prop>
+              <prop oor:name="Context" oor:type="xs:string">
+                <value>com.sun.star.presentation.PresentationDocument</value>
               </prop>
             </node>
           </node>
@@ -55,11 +68,12 @@
           </prop>
           <prop oor:name="MergeContext">
             <value>com.sun.star.text.TextDocument</value>
+            <value>com.sun.star.presentation.PresentationDocument</value>
           </prop>
           <node oor:name="ToolBarItems">
             <node oor:name="B1" oor:op="replace">
               <prop oor:name="URL">
-                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteJob?execute</value>
+                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
                 <value>Paste with credit</value>
