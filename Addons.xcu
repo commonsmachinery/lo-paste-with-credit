@@ -6,6 +6,7 @@
     -->
     <node oor:name="OfficeMenuBarMerging">
       <node oor:name="se.commonsmachinery.extensions.paste_with_credit" oor:op="replace">
+        <!-- writer menu -->
         <node oor:name="M1" oor:op="replace">
           <prop oor:name="MergePoint">
             <value>.uno:EditMenu\.uno:Paste</value>
@@ -18,7 +19,6 @@
           </prop>
           <prop oor:name="MergeContext">
             <value>com.sun.star.text.TextDocument</value>
-            <value>com.sun.star.presentation.PresentationDocument</value>
           </prop>
           <node oor:name="MenuItems">
             <node oor:name="I1" oor:op="replace">
@@ -30,12 +30,40 @@
               </prop>
               <prop oor:name="Context" oor:type="xs:string">
                 <value>com.sun.star.text.TextDocument</value>
+              </prop>
+            </node>
+          </node>
+        </node>
+        <!-- impress menu -->
+        <node oor:name="M2" oor:op="replace">
+          <prop oor:name="MergePoint">
+            <value>.uno:EditMenu\.uno:Paste</value>
+          </prop>
+          <prop oor:name="MergeCommand">
+            <value>AddAfter</value>
+          </prop>
+          <prop oor:name="MergeFallback">
+            <value>AddPath</value>
+          </prop>
+          <prop oor:name="MergeContext">
+            <value>com.sun.star.presentation.PresentationDocument</value>
+          </prop>
+          <node oor:name="MenuItems">
+            <node oor:name="I2" oor:op="replace">
+              <prop oor:name="URL">
+                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+              </prop>
+              <prop oor:name="Title">
+                <value xml:lang="en">Paste with credit</value>
+              </prop>
+              <prop oor:name="Context" oor:type="xs:string">
                 <value>com.sun.star.presentation.PresentationDocument</value>
               </prop>
             </node>
           </node>
         </node>
-        <node oor:name="M2" oor:op="replace">
+        <!-- impress insert credits -->
+        <node oor:name="M3" oor:op="replace">
           <prop oor:name="MergePoint">
             <value>.uno:InsertMenu\.uno:InsertObjectFloatingFrame</value>
           </prop>
@@ -49,7 +77,7 @@
             <value>com.sun.star.presentation.PresentationDocument</value>
           </prop>
           <node oor:name="MenuItems">
-            <node oor:name="I2" oor:op="replace">
+            <node oor:name="I3" oor:op="replace">
               <prop oor:name="URL">
                 <value>service:se.commonsmachinery.extensions.paste_with_credit.InsertCreditsJob?execute</value>
               </prop>
@@ -69,6 +97,7 @@
     -->
     <node oor:name="OfficeToolbarMerging">
       <node oor:name="se.commonsmachinery.extensions.paste_with_credit" oor:op="replace">
+        <!-- writer toolbar -->
         <node oor:name="T1" oor:op="replace">
           <prop oor:name="MergeToolBar">
             <value>standardbar</value>
@@ -84,10 +113,37 @@
           </prop>
           <prop oor:name="MergeContext">
             <value>com.sun.star.text.TextDocument</value>
-            <value>com.sun.star.presentation.PresentationDocument</value>
           </prop>
           <node oor:name="ToolBarItems">
             <node oor:name="B1" oor:op="replace">
+              <prop oor:name="URL">
+                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+              </prop>
+              <prop oor:name="Title">
+                <value>Paste with credit</value>
+              </prop>
+            </node>
+          </node>
+        </node>
+        <!-- impress toolbar -->
+        <node oor:name="T2" oor:op="replace">
+          <prop oor:name="MergeToolBar">
+            <value>standardbar</value>
+          </prop>
+          <prop oor:name="MergePoint">
+            <value>.uno:Paste</value>
+          </prop>
+          <prop oor:name="MergeCommand">
+            <value>AddAfter</value>
+          </prop>
+          <prop oor:name="MergeFallback">
+            <value>AddLast</value>
+          </prop>
+          <prop oor:name="MergeContext">
+            <value>com.sun.star.presentation.PresentationDocument</value>
+          </prop>
+          <node oor:name="ToolBarItems">
+            <node oor:name="B2" oor:op="replace">
               <prop oor:name="URL">
                 <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
               </prop>
