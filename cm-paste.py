@@ -33,7 +33,7 @@ class LOCreditFormatter(libcredit.CreditFormatter):
         self.cursor.collapseToEnd()
         self.hyperlinks = hyperlinks
 
-    def begin(self):
+    def begin(self, subject_uri=None):
         pass
 
     def end(self):
@@ -52,14 +52,14 @@ class LOCreditFormatter(libcredit.CreditFormatter):
     def end_source(self):
         self.text.insertControlCharacter(self.cursor, PARAGRAPH_BREAK, 0)
 
-    def add_title(self, text, url=None):
-        self.add_url(text, url)
+    def add_title(self, token):
+        self.add_url(token.text, token.url)
 
-    def add_attrib(self, text, url=None):
-        self.add_url(text, url)
+    def add_attrib(self, token):
+        self.add_url(token.text, token.url)
 
-    def add_license(self, text, url=None):
-        self.add_url(text, url)
+    def add_license(self, token):
+        self.add_url(token.text, token.url)
 
     def add_text(self, text):
         self.text.insertString(self.cursor, text, False)
