@@ -27,17 +27,38 @@ class LOCreditFormatter(libcredit.CreditFormatter):
     """
     Credit writer that adds text to LibreOffice writer document using UNO.
     """
-    def __init__(self, text, cursor, hyperlinks=True):
+    def __init__(self, text, cursor, hyperlinks=True, ctx = None, graph = None):
         self.text = text
         self.cursor = cursor
         self.cursor.collapseToEnd()
         self.hyperlinks = hyperlinks
 
+        self.ctx = ctx
+        self.graph = graph
+
+        self.subject_stack = []
+        self.current_subject = None
+
     def begin(self, subject_uri=None):
-        pass
+        if self.graph:
+            if subject_uri is not None:
+                new_subject = URI(self.ctx, subject_uri)
+            else:
+                new_subject = None
+                
+            if self.current_subject is not None and new_subject is not None:
+                # Generate a dc:source statement from the previous level
+                self.graph.addStatement(
+                    self.current_subject,
+                    URI(self.ctx, 'http://purl.org/dc/elements/1.1/source'),
+                    new_subject)
+
+            self.subject_stack.append(self.current_subject)
+            self.current_subject = new_subject
 
     def end(self):
-        pass
+        if self.graph:
+            self.current_subject = self.subject_stack.pop()
 
     def begin_sources(self, label=None):
         self.add_text(" " + label)
@@ -53,28 +74,76 @@ class LOCreditFormatter(libcredit.CreditFormatter):
         self.text.insertControlCharacter(self.cursor, PARAGRAPH_BREAK, 0)
 
     def add_title(self, token):
-        self.add_url(token.text, token.url)
+        self.add_url(token)
 
     def add_attrib(self, token):
-        self.add_url(token.text, token.url)
+        self.add_url(token)
 
     def add_license(self, token):
-        self.add_url(token.text, token.url)
+        self.add_url(token)
 
     def add_text(self, text):
         self.text.insertString(self.cursor, text, False)
 
-    def add_url(self, text, url=None):
-        if url:
-            length = len(text)
-            self.text.insertString(self.cursor, text, False)
+    def add_url(self, token):
+        if token.url:
+            length = len(token.text)
+            self.text.insertString(self.cursor, token.text, False)
             self.cursor.goLeft(length, False)
             self.cursor.goRight(length, True)
             if self.hyperlinks:
-                self.cursor.setPropertyValue("HyperLinkURL", url)
+                self.cursor.setPropertyValue("HyperLinkURL", token.url)
             self.cursor.goRight(length, False)
         else:
-            self.add_text(text)
+            self.add_text(token.text)
+
+        if self.current_subject and token.text_property:
+            self.graph.addStatement(
+                self.current_subject,
+                URI(self.ctx, token.text_property),
+                Literal(self.ctx, token.text))
+            
+        if self.current_subject and token.url_property:
+            self.graph.addStatement(
+                self.current_subject,
+                URI(self.ctx, token.url_property),
+                URI(self.ctx, token.url))
+
+
+def URI(ctx, uri):
+    return ctx.ServiceManager.createInstanceWithArguments(
+        "com.sun.star.rdf.URI", (uri, ))
+
+def Literal(ctx, value):
+    return ctx.ServiceManager.createInstanceWithArguments(
+        "com.sun.star.rdf.Literal", (value, ))
+    
+
+def get_graph(ctx, model):
+    uri = URI(ctx, 'http://test-cm/sources')
+    graphs = model.getMetadataGraphsWithType(uri)
+    if graphs:
+        graph_uri = graphs[0]
+    else:
+        graph_uri = model.addMetadataFile('test-cm/sources.rdf', (uri, ))
+
+    return model.getRDFRepository().getGraph(graph_uri)
+
+
+
+def debug_rdf(graph):
+    statements = graph.getStatements(None, None, None)
+    while statements.hasMoreElements():
+        s = statements.nextElement()
+        subj = s.Subject.Namespace + s.Subject.LocalName
+        pred = s.Predicate.Namespace + s.Predicate.LocalName
+        try:
+            obj = s.Object.Value
+        except AttributeError:
+            obj = s.Object.Namespace + s.Object.LocalName
+
+        print(subj, pred, obj)
+
 
 class PasteWithCreditJob(unohelper.Base, XJobExecutor):
     def __init__(self, ctx):
@@ -98,6 +167,8 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
         rdf, descriptor, graphic = image_with_metadata
         img_size = descriptor.getPropertyValue("SizePixel")
 
+        graph = get_graph(self.ctx, model)
+                           
         if model.supportsService("com.sun.star.text.TextDocument"):
             # create a frame to hold the image with caption
             text_frame = model.createInstance("com.sun.star.text.TextFrame")
@@ -129,8 +200,8 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
 
             # add the credit as text below the image
             credit = libcredit.Credit(rdf)
-            credit_writer = LOCreditFormatter(frame_text, cursor)
-            credit.format(credit_writer)
+            credit_writer = LOCreditFormatter(frame_text, cursor, ctx = self.ctx, graph = graph)
+            credit.format(credit_writer, subject_uri = '../content.xml#test')
 
             # scale the image to fit the frame
             image.setPropertyValue("RelativeWidth", 100)
@@ -167,6 +238,8 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
                 int((page.Width - size.Width) / 2),
                 int((page.Height - size.Height) / 2))
             )
+
+        # debug_rdf(graph)
 
     # returns a tuple consisting of (str, GraphicDescriptor, Graphic) or None
     def _get_image_with_metadata(self):
