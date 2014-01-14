@@ -23,6 +23,8 @@ from com.sun.star.text.TextContentAnchorType import AS_CHARACTER
 from com.sun.star.text.TextContentAnchorType import AT_PARAGRAPH
 from com.sun.star.container import NoSuchElementException
 
+BOOKMARK_BASE_NAME = "$image-with-metadata$"
+
 class LOCreditFormatter(libcredit.CreditFormatter):
     """
     Credit writer that adds text to LibreOffice writer document using UNO.
@@ -146,14 +148,10 @@ class Metadata(object):
         statements = self.graph.getStatements(None, None, None)
         while statements.hasMoreElements():
             s = statements.nextElement()
-            subj = s.Subject.Namespace + s.Subject.LocalName
-            pred = s.Predicate.Namespace + s.Predicate.LocalName
-            try:
-                obj = s.Object.Value
-            except AttributeError:
-                obj = s.Object.Namespace + s.Object.LocalName
-
-            print(subj, pred, obj)
+            print(s.Graph.StringValue,
+                  s.Subject.StringValue,
+                  s.Predicate.StringValue,
+                  s.Object.StringValue)
 
 
 class PasteWithCreditJob(unohelper.Base, XJobExecutor):
@@ -198,22 +196,32 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             text.insertTextContent(cursor, text_frame, 0)
             frame_text = text_frame.getText()
 
+            cursor = frame_text.createTextCursor()
+
+            # Add a <text:bookmark> tag to serve as anchor for the RDF
+            # and give us a subject URI.  Ideally, we would get this
+            # from the image but that isn't possible with current
+            # APIs.
+
+            bookmark = model.createInstance("com.sun.star.text.Bookmark")
+            bookmark.setName(BOOKMARK_BASE_NAME)
+            frame_text.insertTextContent(cursor, bookmark, False)
+            bookmark.ensureMetadataReference()
+            cursor.gotoEnd(False)
+
             # create a TextGraphicObject to hold the image
             image = model.createInstance("com.sun.star.text.TextGraphicObject")
             image.setPropertyValue("Graphic", graphic)
             # hack to enlarge the tiny pasted images
             image.setPropertyValue("Width", img_size.Width * 20)
             image.setPropertyValue("Height", img_size.Height * 20)
-
-            # add the image to the text frame
-            cursor = frame_text.createTextCursor()
+            
             frame_text.insertTextContent(cursor, image, False)
-            cursor.gotoNextParagraph(False)
-
+            
             # add the credit as text below the image
             credit = libcredit.Credit(rdf)
             credit_writer = LOCreditFormatter(frame_text, cursor, metadata = metadata)
-            credit.format(credit_writer, subject_uri = '../content.xml#test')
+            credit.format(credit_writer, subject_uri = bookmark.StringValue)
 
             # scale the image to fit the frame
             image.setPropertyValue("RelativeWidth", 100)
