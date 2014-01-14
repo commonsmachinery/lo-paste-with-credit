@@ -27,37 +27,36 @@ class LOCreditFormatter(libcredit.CreditFormatter):
     """
     Credit writer that adds text to LibreOffice writer document using UNO.
     """
-    def __init__(self, text, cursor, hyperlinks=True, ctx = None, graph = None):
+    def __init__(self, text, cursor, hyperlinks=True, metadata = None):
         self.text = text
         self.cursor = cursor
         self.cursor.collapseToEnd()
         self.hyperlinks = hyperlinks
 
-        self.ctx = ctx
-        self.graph = graph
+        self.metadata = metadata
 
         self.subject_stack = []
         self.current_subject = None
 
     def begin(self, subject_uri=None):
-        if self.graph:
+        if self.metadata:
             if subject_uri is not None:
-                new_subject = URI(self.ctx, subject_uri)
+                new_subject = self.metadata.uri(subject_uri)
             else:
                 new_subject = None
                 
             if self.current_subject is not None and new_subject is not None:
                 # Generate a dc:source statement from the previous level
-                self.graph.addStatement(
+                self.metadata.add_statement(
                     self.current_subject,
-                    URI(self.ctx, 'http://purl.org/dc/elements/1.1/source'),
+                    self.metadata.uri('http://purl.org/dc/elements/1.1/source'),
                     new_subject)
 
             self.subject_stack.append(self.current_subject)
             self.current_subject = new_subject
 
     def end(self):
-        if self.graph:
+        if self.metadata:
             self.current_subject = self.subject_stack.pop()
 
     def begin_sources(self, label=None):
@@ -98,51 +97,63 @@ class LOCreditFormatter(libcredit.CreditFormatter):
             self.add_text(token.text)
 
         if self.current_subject and token.text_property:
-            self.graph.addStatement(
+            self.metadata.add_statement(
                 self.current_subject,
-                URI(self.ctx, token.text_property),
-                Literal(self.ctx, token.text))
+                self.metadata.uri(token.text_property),
+                self.metadata.literal(token.text))
             
         if self.current_subject and token.url_property:
-            self.graph.addStatement(
+            self.metadata.add_statement(
                 self.current_subject,
-                URI(self.ctx, token.url_property),
-                URI(self.ctx, token.url))
+                self.metadata.uri(token.url_property),
+                self.metadata.uri(token.url))
 
 
-def URI(ctx, uri):
-    return ctx.ServiceManager.createInstanceWithArguments(
-        "com.sun.star.rdf.URI", (uri, ))
+class Metadata(object):
+    """Helper functions for working with the RDF metadata APIs"""
 
-def Literal(ctx, value):
-    return ctx.ServiceManager.createInstanceWithArguments(
-        "com.sun.star.rdf.Literal", (value, ))
+    GRAPH_FILE = 'metadata/sources.rdf'
+    GRAPH_TYPE_URI = 'http://purl.org/dc/terms/ProvenanceStatement'
     
+    def __init__(self, ctx, model):
+        self.ctx = ctx
+        self.model = model
+        self.repository = self.model.getRDFRepository()
 
-def get_graph(ctx, model):
-    uri = URI(ctx, 'http://test-cm/sources')
-    graphs = model.getMetadataGraphsWithType(uri)
-    if graphs:
-        graph_uri = graphs[0]
-    else:
-        graph_uri = model.addMetadataFile('test-cm/sources.rdf', (uri, ))
+        # Load or create graph
+        type_uri = self.uri(self.GRAPH_TYPE_URI)
+        graph_uris = self.model.getMetadataGraphsWithType(type_uri)
+        if graph_uris:
+            graph_uri = graph_uris[0]
+        else:
+            graph_uri = self.model.addMetadataFile(self.GRAPH_FILE, (type_uri, ))
 
-    return model.getRDFRepository().getGraph(graph_uri)
+        self.graph = self.repository.getGraph(graph_uri)
 
 
+    def uri(self, uri):
+        return self.ctx.ServiceManager.createInstanceWithArguments(
+            "com.sun.star.rdf.URI", (uri, ))
 
-def debug_rdf(graph):
-    statements = graph.getStatements(None, None, None)
-    while statements.hasMoreElements():
-        s = statements.nextElement()
-        subj = s.Subject.Namespace + s.Subject.LocalName
-        pred = s.Predicate.Namespace + s.Predicate.LocalName
-        try:
-            obj = s.Object.Value
-        except AttributeError:
-            obj = s.Object.Namespace + s.Object.LocalName
+    def literal(self, value):
+        return self.ctx.ServiceManager.createInstanceWithArguments(
+            "com.sun.star.rdf.Literal", (value, ))
+    
+    def add_statement(self, subject, predicate, obj):
+        self.graph.addStatement(subject, predicate, obj)
 
-        print(subj, pred, obj)
+    def dump_graph(self):
+        statements = self.graph.getStatements(None, None, None)
+        while statements.hasMoreElements():
+            s = statements.nextElement()
+            subj = s.Subject.Namespace + s.Subject.LocalName
+            pred = s.Predicate.Namespace + s.Predicate.LocalName
+            try:
+                obj = s.Object.Value
+            except AttributeError:
+                obj = s.Object.Namespace + s.Object.LocalName
+
+            print(subj, pred, obj)
 
 
 class PasteWithCreditJob(unohelper.Base, XJobExecutor):
@@ -167,9 +178,10 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
         rdf, descriptor, graphic = image_with_metadata
         img_size = descriptor.getPropertyValue("SizePixel")
 
-        graph = get_graph(self.ctx, model)
-                           
         if model.supportsService("com.sun.star.text.TextDocument"):
+            # Metadata is only supported in text documents
+            metadata = Metadata(ctx, model)
+
             # create a frame to hold the image with caption
             text_frame = model.createInstance("com.sun.star.text.TextFrame")
             text_frame.setSize(Size(15000,400))
@@ -200,7 +212,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
 
             # add the credit as text below the image
             credit = libcredit.Credit(rdf)
-            credit_writer = LOCreditFormatter(frame_text, cursor, ctx = self.ctx, graph = graph)
+            credit_writer = LOCreditFormatter(frame_text, cursor, metadata = metadata)
             credit.format(credit_writer, subject_uri = '../content.xml#test')
 
             # scale the image to fit the frame
@@ -217,6 +229,9 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             credit_writer = libcredit.TextCreditFormatter()
             credit.format(credit_writer)
             image.setPropertyValue("Description", credit_writer.get_text())
+
+            metadata.dump_graph()
+
         elif model.supportsService("com.sun.star.presentation.PresentationDocument"):
             page = controller.getCurrentPage()
 
@@ -238,8 +253,6 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
                 int((page.Width - size.Width) / 2),
                 int((page.Height - size.Height) / 2))
             )
-
-        # debug_rdf(graph)
 
     # returns a tuple consisting of (str, GraphicDescriptor, Graphic) or None
     def _get_image_with_metadata(self):
