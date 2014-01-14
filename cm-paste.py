@@ -2,9 +2,10 @@
 #
 # lo-paste-with-credit - LibreOffice extensions for pasting images with metadata
 #
-# Copyright 2013 Commons Machinery http://commonsmachinery.se/
+# Copyright 2013-2014 Commons Machinery http://commonsmachinery.se/
 #
 # Authors: Artem Popov <artfwo@commonsmachinery.se>
+#          Peter Liljenberg <peter@commonsmachinery.se>
 #
 # Distributed under an GPLv2 license, please see LICENSE in the top dir.
 
@@ -75,36 +76,40 @@ class LOCreditFormatter(libcredit.CreditFormatter):
         self.text.insertControlCharacter(self.cursor, PARAGRAPH_BREAK, 0)
 
     def add_title(self, token):
-        self.add_url(token)
+        self.add_token(token)
 
     def add_attrib(self, token):
-        self.add_url(token)
+        self.add_token(token)
 
     def add_license(self, token):
-        self.add_url(token)
+        self.add_token(token)
 
     def add_text(self, text):
         self.text.insertString(self.cursor, text, False)
 
-    def add_url(self, token):
-        if token.url:
-            length = len(token.text)
-            self.text.insertString(self.cursor, token.text, False)
-            self.cursor.goLeft(length, False)
-            self.cursor.goRight(length, True)
-            if self.hyperlinks:
-                self.cursor.setPropertyValue("HyperLinkURL", token.url)
-            self.cursor.goRight(length, False)
-        else:
-            self.add_text(token.text)
+    def add_token(self, token):
+        length = len(token.text)
+        self.text.insertString(self.cursor, token.text, False)
+        self.cursor.goLeft(length, False)
+        self.cursor.goRight(length, True)
+
+        if token.url and self.hyperlinks:
+            self.cursor.setPropertyValue("HyperLinkURL", token.url)
 
         if self.current_subject and token.text_property:
-            self.metadata.add_statement(
+            # Turn the text into a metadata field that's the object of
+            # an RDFa statement
+            md = self.metadata.create_meta_element()
+            self.text.insertTextContent(self.cursor, md, True)
+            self.metadata.add_rdfa_statements(
                 self.current_subject,
-                self.metadata.uri(token.text_property),
-                self.metadata.literal(token.text))
-            
+                (self.metadata.uri(token.text_property), ),
+                md)
+
+        self.cursor.goRight(length, False)
+
         if self.current_subject and token.url_property:
+            # Add regular statement for the URL predicate
             self.metadata.add_statement(
                 self.current_subject,
                 self.metadata.uri(token.url_property),
@@ -144,14 +149,33 @@ class Metadata(object):
     def add_statement(self, subject, predicate, obj):
         self.graph.addStatement(subject, predicate, obj)
 
+    def add_rdfa_statements(self, subject, predicates, literal):
+        self.repository.setStatementRDFa(subject, predicates, literal, '', None)
+
+    def create_meta_element(self):
+        return self.model.createInstance('com.sun.star.text.InContentMetadata')        
+
     def dump_graph(self):
-        statements = self.graph.getStatements(None, None, None)
+        statements = self.repository.getStatements(None, None, None)
         while statements.hasMoreElements():
             s = statements.nextElement()
-            print(s.Graph.StringValue,
-                  s.Subject.StringValue,
-                  s.Predicate.StringValue,
-                  s.Object.StringValue)
+            self.dump_statement(s)
+
+    def dump_statement(self, s):
+        if hasattr(s.Object, 'Value'):
+            obj = '"{0}"'.format(s.Object.Value)
+        else:
+            obj = '<{0}>'.format(s.Object.StringValue)
+
+        if s.Graph:
+            g = s.Graph.StringValue
+        else:
+            g = 'RDFa'
+
+        print('<{0}> <{1}> {2} . # {3}'.format(
+                s.Subject.StringValue,
+                s.Predicate.StringValue,
+                obj, g))
 
 
 class PasteWithCreditJob(unohelper.Base, XJobExecutor):
@@ -238,7 +262,8 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             credit.format(credit_writer)
             image.setPropertyValue("Description", credit_writer.get_text())
 
-            metadata.dump_graph()
+            # DEBUG:
+            # metadata.dump_graph()
 
         elif model.supportsService("com.sun.star.presentation.PresentationDocument"):
             page = controller.getCurrentPage()
