@@ -11,12 +11,17 @@
 """Usage: get-image-metadata.py [image-bookmark]
 
 Without bookmark, list all images with bookmarks.
-With bookmark, output metadata for that image.
+With bookmark, output metadata for that image as RDF_XML
 """
 
 import sys
+import uuid
+
 import uno
 import unohelper
+
+from com.sun.star.rdf.FileFormat import RDF_XML
+from com.sun.star.io import XOutputStream
 
 BOOKMARK_BASE_NAME = "$image-with-metadata$"
 
@@ -47,14 +52,30 @@ def list_images(model):
         if n.startswith(BOOKMARK_BASE_NAME):
             print(n)
 
+
 def get_image_metadata(ctx, model, name):
+    
     bookmark = model.getBookmarks().getByName(name)
 
-    seen_subjects = {}
     repository = model.getRDFRepository()
-    dump_statements(repository, bookmark, seen_subjects)
 
-def dump_statements(repository, subject, seen_subjects):
+    ss = StringOutputStream()
+    
+    seen_subjects = {}
+
+    # Copy statements to a temporary graph
+    graph_uri = uri(ctx, 'urn:' + str(uuid.uuid4()) + '#temp')
+    target_graph = repository.createGraph(graph_uri)
+    try:
+        copy_statements(repository, bookmark, seen_subjects, target_graph)
+        repository.exportGraph(RDF_XML, ss, graph_uri, model)
+    finally:
+        repository.destroyGraph(graph_uri)
+
+    print(str(ss))
+    
+
+def copy_statements(repository, subject, seen_subjects, graph):
     if subject.StringValue in seen_subjects:
         return
 
@@ -63,29 +84,38 @@ def dump_statements(repository, subject, seen_subjects):
     statements = repository.getStatements(subject, None, None)
     while statements.hasMoreElements():
         s = statements.nextElement()
-        dump_statement(s)
-        if not hasattr(s.Object, 'Value'):
-            # Recurse over non-literal
-            dump_statements(repository, s.Object, seen_subjects)
+
+        # Only copy if not a duplicate
+        if not graph.getStatements(s.Subject, s.Predicate, s.Object).hasMoreElements():
+            graph.addStatement(s.Subject, s.Predicate, s.Object)
+        
+            if not hasattr(s.Object, 'Value'):
+                # Recurse over non-literal
+                copy_statements(repository, s.Object, seen_subjects, graph)
             
 
-def dump_statement(s):
-    if hasattr(s.Object, 'Value'):
-        obj = '"{0}"'.format(s.Object.Value)
-    else:
-        obj = '<{0}>'.format(s.Object.StringValue)
+def uri(ctx, string):
+    return ctx.ServiceManager.createInstanceWithArguments(
+        "com.sun.star.rdf.URI", (string, ))
 
-    if s.Graph:
-        g = s.Graph.StringValue
-    else:
-        g = 'RDFa'
 
-    print('<{0}> <{1}> {2} . # {3}'.format(
-            s.Subject.StringValue,
-            s.Predicate.StringValue,
-            obj, g))
+class StringOutputStream(unohelper.Base, XOutputStream):
+    def __init__(self):
+        self.s = uno.ByteSequence('')
+
+    def writeBytes(self, data):
+        self.s = self.s + data
+
+    def flush(self):
+        pass
+
+    def closeOutput(self):
+        pass
+
+    def __str__(self):
+        return self.s.value.decode('utf-8')
     
-    
+
 
 if __name__ == '__main__':
     main()
