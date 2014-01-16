@@ -356,7 +356,11 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             page.add(shape)
 
             attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
-            attr.Value = rdf
+            try:
+                attr.Value = rdf.decode('utf-8')
+            except UnicodeError:
+                attr.Value = rdf.decode('utf-16')
+                
             attributes = shape.UserDefinedAttributes
             attributes.insertByName("cm-metadata", attr)
             shape.UserDefinedAttributes = attributes
@@ -595,6 +599,10 @@ if __name__ == "__main__":
         else:
             print('could not get clipboard ownership, probably no image selected')
             
+    elif cmd == 'credit':
+        job = InsertCreditsJob(ctx)
+        job.trigger(None)
+
     else:
         print("unknown command", cmd)
 
