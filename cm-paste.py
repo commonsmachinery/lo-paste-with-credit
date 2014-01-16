@@ -94,6 +94,10 @@ def get_image_metadata(ctx, model, name):
     target_graph = repository.createGraph(graph_uri)
     try:
         copy_statements(repository, bookmark, seen_subjects, target_graph)
+
+        # Add the <> dc:source <imageURI> triple that libcredit uses to find the metadata
+        target_graph.addStatement(model, uri(ctx, 'http://purl.org/dc/elements/1.1/source'), bookmark)
+
         repository.exportGraph(RDF_XML, ss, graph_uri, model)
     finally:
         repository.destroyGraph(graph_uri)
@@ -459,7 +463,7 @@ class ImageWithMetadataTransferable(unohelper.Base, XTransferable):
         self._img_type = "image/png"
 
         self._img_data = img_data
-        self._rdf_data = rdf_data.encode("utf-16")
+        self._rdf_data = rdf_data.encode("utf-8")
 
     def getTransferData(self, flavor):
         if flavor.MimeType == self._rdf_type:
@@ -483,7 +487,7 @@ class ImageWithMetadataTransferable(unohelper.Base, XTransferable):
 
     def isDataFlavorSupported(self, flavor):
         return flavor.MimeType == self._rdf_type or \
-               flavor.MimeType == self._bpm_type
+               flavor.MimeType == self._img_type
 
 
 class ImageWithMetadataClipboardOwner(unohelper.Base, XClipboardOwner):
@@ -542,6 +546,7 @@ class CopyWithMetadataJob(unohelper.Base, XJobExecutor):
                 "com.sun.star.datatransfer.clipboard.SystemClipboard", ctx)
             clip.setContents(img_transferable, self.clip_owner)
 
+            
 
 g_ImplementationHelper = unohelper.ImplementationHelper()
 
@@ -560,6 +565,9 @@ g_ImplementationHelper.addImplementation(
 )
 
 if __name__ == "__main__":
+    import sys
+    import time
+
     localContext = uno.getComponentContext()
     resolver = localContext.ServiceManager.createInstanceWithContext(
         "com.sun.star.bridge.UnoUrlResolver", localContext)
@@ -569,15 +577,23 @@ if __name__ == "__main__":
     ctx = resolver.resolve("uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
     smgr = ctx.ServiceManager
 
-    #job = PasteWithCreditJob(ctx)
-    #job.trigger(None)
-    job = CopyWithMetadataJob(ctx)
-    job.trigger(None)
+    cmd = sys.argv[1]
+    if cmd == 'paste':
+        job = PasteWithCreditJob(ctx)
+        job.trigger(None)
 
-    import time
-    while job.clip_owner.is_owner:
-        print("still owner...")
-        time.sleep(1)
+    elif cmd == 'copy':
+        job = CopyWithMetadataJob(ctx)
+        job.trigger(None)
+
+        print('took clipboard ownership')
+
+        while job.clip_owner.is_owner:
+            time.sleep(1)
+
+        print("lost clipboard ownership")
+    else:
+        print("unknown command", cmd)
 
     # Python-UNO bridge workaround: call a synchronous method, before the python
     # process exits to sync the remote-bridge cache, otherwise an async call
