@@ -11,6 +11,8 @@
 
 import libcredit
 from xml.dom import minidom
+import tempfile, os
+import uuid
 
 import uno
 import unohelper
@@ -19,12 +21,85 @@ from com.sun.star.awt import Size
 from com.sun.star.awt import Point
 from com.sun.star.task import XJobExecutor
 from com.sun.star.beans import PropertyValue
+from com.sun.star.io import XOutputStream
+
+from com.sun.star.datatransfer import DataFlavor
+from com.sun.star.datatransfer import XTransferable
+from com.sun.star.datatransfer.clipboard import XClipboardOwner
+
+from com.sun.star.ui import XContextMenuInterceptor
+from com.sun.star.ui.ContextMenuInterceptorAction import IGNORED
+from com.sun.star.ui.ContextMenuInterceptorAction import EXECUTE_MODIFIED
+
 from com.sun.star.text.ControlCharacter import PARAGRAPH_BREAK
 from com.sun.star.text.TextContentAnchorType import AS_CHARACTER
 from com.sun.star.text.TextContentAnchorType import AT_PARAGRAPH
+from com.sun.star.rdf.FileFormat import RDF_XML
+
 from com.sun.star.container import NoSuchElementException
 
 BOOKMARK_BASE_NAME = "$metadata-tag-do-not-edit$"
+
+
+class StringOutputStream(unohelper.Base, XOutputStream):
+    def __init__(self):
+        self.s = uno.ByteSequence('')
+
+    def writeBytes(self, data):
+        self.s = self.s + data
+
+    def flush(self):
+        pass
+
+    def closeOutput(self):
+        pass
+
+    def __str__(self):
+        return self.s.value.decode('utf-8')
+
+def copy_statements(repository, subject, seen_subjects, graph):
+    if subject.StringValue in seen_subjects:
+        return
+
+    seen_subjects[subject.StringValue] = 1
+    
+    statements = repository.getStatements(subject, None, None)
+    while statements.hasMoreElements():
+        s = statements.nextElement()
+
+        # Only copy if not a duplicate
+        if not graph.getStatements(s.Subject, s.Predicate, s.Object).hasMoreElements():
+            graph.addStatement(s.Subject, s.Predicate, s.Object)
+        
+            if not hasattr(s.Object, 'Value'):
+                # Recurse over non-literal
+                copy_statements(repository, s.Object, seen_subjects, graph)
+
+def uri(ctx, string):
+    return ctx.ServiceManager.createInstanceWithArguments(
+        "com.sun.star.rdf.URI", (string, ))
+
+def get_image_metadata(ctx, model, name):
+
+    bookmark = model.getBookmarks().getByName(name)
+
+    repository = model.getRDFRepository()
+
+    ss = StringOutputStream()
+
+    seen_subjects = {}
+
+    # Copy statements to a temporary graph
+    graph_uri = uri(ctx, 'urn:' + str(uuid.uuid4()) + '#temp')
+    target_graph = repository.createGraph(graph_uri)
+    try:
+        copy_statements(repository, bookmark, seen_subjects, target_graph)
+        repository.exportGraph(RDF_XML, ss, graph_uri, model)
+    finally:
+        repository.destroyGraph(graph_uri)
+
+    return str(ss)
+
 
 class LOCreditFormatter(libcredit.CreditFormatter):
     """
@@ -47,7 +122,7 @@ class LOCreditFormatter(libcredit.CreditFormatter):
                 new_subject = self.metadata.uri(subject_uri)
             else:
                 new_subject = None
-                
+
             if self.current_subject is not None and new_subject is not None:
                 # Generate a dc:source statement from the previous level
                 self.metadata.add_statement(
@@ -121,7 +196,7 @@ class Metadata(object):
 
     GRAPH_FILE = 'metadata/sources.rdf'
     GRAPH_TYPE_URI = 'http://purl.org/dc/terms/ProvenanceStatement'
-    
+
     def __init__(self, ctx, model):
         self.ctx = ctx
         self.model = model
@@ -145,7 +220,7 @@ class Metadata(object):
     def literal(self, value):
         return self.ctx.ServiceManager.createInstanceWithArguments(
             "com.sun.star.rdf.Literal", (value, ))
-    
+
     def add_statement(self, subject, predicate, obj):
         self.graph.addStatement(subject, predicate, obj)
 
@@ -153,7 +228,7 @@ class Metadata(object):
         self.repository.setStatementRDFa(subject, predicates, literal, '', None)
 
     def create_meta_element(self):
-        return self.model.createInstance('com.sun.star.text.InContentMetadata')        
+        return self.model.createInstance('com.sun.star.text.InContentMetadata')
 
     def dump_graph(self):
         statements = self.repository.getStatements(None, None, None)
@@ -240,9 +315,9 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             image.setPropertyValue("Width", img_size.Width * 20)
             image.setPropertyValue("Height", img_size.Height * 20)
             image.setName(bookmark.getName())
-            
+
             frame_text.insertTextContent(cursor, image, False)
-            
+
             # add the credit as text below the image
             credit = libcredit.Credit(rdf)
             credit_writer = LOCreditFormatter(frame_text, cursor, metadata = metadata)
@@ -321,6 +396,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
 
         return None
 
+
 class InsertCreditsJob(unohelper.Base, XJobExecutor):
     def __init__(self, ctx):
         self.ctx = ctx
@@ -376,6 +452,97 @@ class InsertCreditsJob(unohelper.Base, XJobExecutor):
             int((page.Height - size.Height) / 2))
         )
 
+
+class ImageWithMetadataTransferable(unohelper.Base, XTransferable):
+    def __init__(self, img_data, rdf_data):
+        self._rdf_type = "application/rdf+xml"
+        self._img_type = "image/png"
+
+        self._img_data = img_data
+        self._rdf_data = rdf_data.encode("utf-16")
+
+    def getTransferData(self, flavor):
+        if flavor.MimeType == self._rdf_type:
+            return uno.ByteSequence(self._rdf_data)
+        if flavor.MimeType == self._img_type:
+            return uno.ByteSequence(self._img_data)
+
+    def getTransferDataFlavors(self):
+        df_rdf = DataFlavor()
+        df_rdf.MimeType = self._rdf_type
+        df_rdf.HumanPresentableName = ""
+        #df_rdf.DataType = uno.getTypeByName("[]byte")
+        df_rdf.DataType = uno.getTypeByName("string")
+
+        df_img = DataFlavor()
+        df_img.MimeType = self._img_type
+        df_img.HumanPresentableName = ""
+        df_img.DataType = uno.getTypeByName("[]byte")
+
+        return (df_rdf, df_img)
+
+    def isDataFlavorSupported(self, flavor):
+        return flavor.MimeType == self._rdf_type or \
+               flavor.MimeType == self._bpm_type
+
+
+class ImageWithMetadataClipboardOwner(unohelper.Base, XClipboardOwner):
+    def __init__(self):
+        self.is_owner = True
+
+    def lostOwnership(self, clipboard, transferable):
+        self.is_owner = False
+
+
+class CopyWithMetadataJob(unohelper.Base, XJobExecutor):
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.clip_owner = ImageWithMetadataClipboardOwner()
+
+    def trigger(self, args):
+        # access the current writer document
+        desktop = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.frame.Desktop", self.ctx)
+
+        model = desktop.getCurrentComponent()
+        controller = model.getCurrentController()
+        selection = controller.getSelection()
+
+        if selection.supportsService("com.sun.star.text.TextGraphicObject") and selection.getName():
+            img_name = selection.getName()
+
+            # use tempfile to export graphic
+            temp = tempfile.NamedTemporaryFile(delete=False)
+
+            url_property = PropertyValue()
+            url_property.Name = "URL"
+            url_property.Value = "file:///" + temp.name
+
+            # sadly, OutputStream doesn't work
+            #stream_property = PropertyValue()
+            #stream_property.Name = "OutputStream"
+            #stream_property.Value = out_stream
+
+            mime_property = PropertyValue()
+            mime_property.Name = "MimeType"
+            mime_property.Value = "image/png"
+
+            graphic_provider = self.ctx.ServiceManager.createInstanceWithContext(
+                "com.sun.star.graphic.GraphicProvider", self.ctx)
+            graphic_provider.storeGraphic(selection.Graphic, (url_property, mime_property))
+
+            temp.close()
+            img_data = open(temp.name, "rb").read()
+            os.unlink(temp.name)
+
+            img_metadata = get_image_metadata(self.ctx, model, img_name)
+
+            img_transferable = ImageWithMetadataTransferable(img_data, img_metadata)
+            clip = ctx.ServiceManager.createInstanceWithContext(
+                "com.sun.star.datatransfer.clipboard.SystemClipboard", ctx)
+            clip.setContents(img_transferable, self.clip_owner)
+
+
 g_ImplementationHelper = unohelper.ImplementationHelper()
 
 # job class as defined in the .xcu
@@ -402,8 +569,15 @@ if __name__ == "__main__":
     ctx = resolver.resolve("uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
     smgr = ctx.ServiceManager
 
-    job = PasteWithCreditJob(ctx)
+    #job = PasteWithCreditJob(ctx)
+    #job.trigger(None)
+    job = CopyWithMetadataJob(ctx)
     job.trigger(None)
+
+    import time
+    while job.clip_owner.is_owner:
+        print("still owner...")
+        time.sleep(1)
 
     # Python-UNO bridge workaround: call a synchronous method, before the python
     # process exits to sync the remote-bridge cache, otherwise an async call
