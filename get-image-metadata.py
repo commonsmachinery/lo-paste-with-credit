@@ -23,7 +23,7 @@ import unohelper
 from com.sun.star.rdf.FileFormat import RDF_XML
 from com.sun.star.io import XOutputStream
 
-BOOKMARK_BASE_NAME = "$image-with-metadata$"
+BOOKMARK_BASE_NAME = "$metadata-tag-do-not-edit$"
 
 def main():
     localContext = uno.getComponentContext()

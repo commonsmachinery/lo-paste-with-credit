@@ -24,7 +24,7 @@ from com.sun.star.text.TextContentAnchorType import AS_CHARACTER
 from com.sun.star.text.TextContentAnchorType import AT_PARAGRAPH
 from com.sun.star.container import NoSuchElementException
 
-BOOKMARK_BASE_NAME = "$image-with-metadata$"
+BOOKMARK_BASE_NAME = "$metadata-tag-do-not-edit$"
 
 class LOCreditFormatter(libcredit.CreditFormatter):
     """
