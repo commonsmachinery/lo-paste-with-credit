@@ -378,7 +378,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
 
         if "image/png" in mimeTypes and "application/rdf+xml" in mimeTypes:
             rdf_clip = next(d for d in data_flavors if d.MimeType == "application/rdf+xml")
-            rdf = clip.getContents().getTransferData(rdf_clip).value.decode("utf-16")
+            rdf = clip.getContents().getTransferData(rdf_clip).value
 
             img_clip = next(d for d in data_flavors if d.MimeType == "image/png")
             img = clip.getContents().getTransferData(img_clip)
@@ -501,7 +501,7 @@ class ImageWithMetadataClipboardOwner(unohelper.Base, XClipboardOwner):
 class CopyWithMetadataJob(unohelper.Base, XJobExecutor):
     def __init__(self, ctx):
         self.ctx = ctx
-        self.clip_owner = ImageWithMetadataClipboardOwner()
+        self.clip_owner = None
 
     def trigger(self, args):
         # access the current writer document
@@ -542,6 +542,7 @@ class CopyWithMetadataJob(unohelper.Base, XJobExecutor):
             img_metadata = get_image_metadata(self.ctx, model, img_name)
 
             img_transferable = ImageWithMetadataTransferable(img_data, img_metadata)
+            self.clip_owner = ImageWithMetadataClipboardOwner()
             clip = ctx.ServiceManager.createInstanceWithContext(
                 "com.sun.star.datatransfer.clipboard.SystemClipboard", ctx)
             clip.setContents(img_transferable, self.clip_owner)
@@ -586,12 +587,14 @@ if __name__ == "__main__":
         job = CopyWithMetadataJob(ctx)
         job.trigger(None)
 
-        print('took clipboard ownership')
-
-        while job.clip_owner.is_owner:
-            time.sleep(1)
-
-        print("lost clipboard ownership")
+        if job.clip_owner:
+            print('took clipboard ownership')            
+            while job.clip_owner.is_owner:
+                time.sleep(1)
+            print("lost clipboard ownership")
+        else:
+            print('could not get clipboard ownership, probably no image selected')
+            
     else:
         print("unknown command", cmd)
 
