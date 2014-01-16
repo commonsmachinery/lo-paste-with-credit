@@ -228,9 +228,9 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             # APIs.
 
             bookmark = model.createInstance("com.sun.star.text.Bookmark")
-            bookmark.setName(BOOKMARK_BASE_NAME)
             frame_text.insertTextContent(cursor, bookmark, False)
             bookmark.ensureMetadataReference()
+            bookmark.setName(BOOKMARK_BASE_NAME + bookmark.LocalName)
             cursor.gotoEnd(False)
 
             # create a TextGraphicObject to hold the image
@@ -239,6 +239,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             # hack to enlarge the tiny pasted images
             image.setPropertyValue("Width", img_size.Width * 20)
             image.setPropertyValue("Height", img_size.Height * 20)
+            image.setName(bookmark.getName())
             
             frame_text.insertTextContent(cursor, image, False)
             
