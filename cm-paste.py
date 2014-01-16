@@ -356,10 +356,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             page.add(shape)
 
             attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
-            try:
-                attr.Value = rdf.decode('utf-8')
-            except UnicodeError:
-                attr.Value = rdf.decode('utf-16')
+            attr.Value = rdf
                 
             attributes = shape.UserDefinedAttributes
             attributes.insertByName("cm-metadata", attr)
@@ -383,6 +380,12 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
         if "image/png" in mimeTypes and "application/rdf+xml" in mimeTypes:
             rdf_clip = next(d for d in data_flavors if d.MimeType == "application/rdf+xml")
             rdf = clip.getContents().getTransferData(rdf_clip).value
+
+            # We might get both UTF-8 and UTF-16 here.  
+            try:
+                rdf = rdf.decode('utf-8')
+            except UnicodeError:
+                rdf = rdf.decode('utf-16')
 
             img_clip = next(d for d in data_flavors if d.MimeType == "image/png")
             img = clip.getContents().getTransferData(img_clip)
@@ -467,7 +470,7 @@ class ImageWithMetadataTransferable(unohelper.Base, XTransferable):
         self._img_type = "image/png"
 
         self._img_data = img_data
-        self._rdf_data = rdf_data.encode("utf-8")
+        self._rdf_data = rdf_data.encode("utf-16")
 
     def getTransferData(self, flavor):
         if flavor.MimeType == self._rdf_type:
