@@ -470,7 +470,7 @@ class ImageWithMetadataTransferable(unohelper.Base, XTransferable):
         self._img_type = "image/png"
 
         self._img_data = img_data
-        self._rdf_data = rdf_data.encode("utf-16")
+        self._rdf_data = rdf_data.encode("utf-8")
 
     def getTransferData(self, flavor):
         if flavor.MimeType == self._rdf_type:
@@ -597,7 +597,11 @@ if __name__ == "__main__":
         if job.clip_owner:
             print('took clipboard ownership')            
             while job.clip_owner.is_owner:
-                time.sleep(1)
+                try:
+                    time.sleep(1)
+                except KeyboardInterrupt:
+                    print("I'm sorry Dave, I can't let you do that.")
+                    print("Copy something else to make the script exit.")
             print("lost clipboard ownership")
         else:
             print('could not get clipboard ownership, probably no image selected')
