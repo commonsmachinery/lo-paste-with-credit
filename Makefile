@@ -4,6 +4,8 @@ SOURCES = \
 	description.xml \
 	META-INF/manifest.xml \
 	Addons.xcu \
+	Jobs.xcu \
+	ProtocolHandler.xcu \
 	cm-paste.py
 
 ADDITIONAL_PATHS = pythonpath
