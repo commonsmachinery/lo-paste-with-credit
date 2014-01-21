@@ -287,7 +287,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
 
         if model.supportsService("com.sun.star.text.TextDocument"):
             # Metadata is only supported in text documents
-            metadata = Metadata(ctx, model)
+            metadata = Metadata(self.ctx, model)
 
             # create a frame to hold the image with caption
             text_frame = model.createInstance("com.sun.star.text.TextFrame")
