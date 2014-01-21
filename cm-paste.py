@@ -19,6 +19,7 @@ import unohelper
 
 from com.sun.star.awt import Size
 from com.sun.star.awt import Point
+from com.sun.star.task import XJob
 from com.sun.star.task import XJobExecutor
 from com.sun.star.beans import PropertyValue
 from com.sun.star.io import XOutputStream
@@ -27,6 +28,9 @@ from com.sun.star.datatransfer import DataFlavor
 from com.sun.star.datatransfer import XTransferable
 from com.sun.star.datatransfer.clipboard import XClipboardOwner
 
+from com.sun.star.lang import XInitialization
+from com.sun.star.frame import XDispatch
+from com.sun.star.frame import XDispatchProvider
 from com.sun.star.ui import XContextMenuInterceptor
 from com.sun.star.ui.ContextMenuInterceptorAction import IGNORED
 from com.sun.star.ui.ContextMenuInterceptorAction import EXECUTE_MODIFIED
@@ -35,8 +39,10 @@ from com.sun.star.text.ControlCharacter import PARAGRAPH_BREAK
 from com.sun.star.text.TextContentAnchorType import AS_CHARACTER
 from com.sun.star.text.TextContentAnchorType import AT_PARAGRAPH
 from com.sun.star.rdf.FileFormat import RDF_XML
+from com.sun.star.ui.ActionTriggerSeparatorType import LINE
 
 from com.sun.star.container import NoSuchElementException
+
 
 BOOKMARK_BASE_NAME = "$metadata-tag-do-not-edit$"
 
@@ -62,7 +68,7 @@ def copy_statements(repository, subject, seen_subjects, graph):
         return
 
     seen_subjects[subject.StringValue] = 1
-    
+
     statements = repository.getStatements(subject, None, None)
     while statements.hasMoreElements():
         s = statements.nextElement()
@@ -70,7 +76,7 @@ def copy_statements(repository, subject, seen_subjects, graph):
         # Only copy if not a duplicate
         if not graph.getStatements(s.Subject, s.Predicate, s.Object).hasMoreElements():
             graph.addStatement(s.Subject, s.Predicate, s.Object)
-        
+
             if not hasattr(s.Object, 'Value'):
                 # Recurse over non-literal
                 copy_statements(repository, s.Object, seen_subjects, graph)
@@ -357,7 +363,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
 
             attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
             attr.Value = rdf
-                
+
             attributes = shape.UserDefinedAttributes
             attributes.insertByName("cm-metadata", attr)
             shape.UserDefinedAttributes = attributes
@@ -381,7 +387,7 @@ class PasteWithCreditJob(unohelper.Base, XJobExecutor):
             rdf_clip = next(d for d in data_flavors if d.MimeType == "application/rdf+xml")
             rdf = clip.getContents().getTransferData(rdf_clip).value
 
-            # We might get both UTF-8 and UTF-16 here.  
+            # We might get both UTF-8 and UTF-16 here.
             try:
                 rdf = rdf.decode('utf-8')
             except UnicodeError:
@@ -550,26 +556,115 @@ class CopyWithMetadataJob(unohelper.Base, XJobExecutor):
 
             img_transferable = ImageWithMetadataTransferable(img_data, img_metadata)
             self.clip_owner = ImageWithMetadataClipboardOwner()
-            clip = ctx.ServiceManager.createInstanceWithContext(
-                "com.sun.star.datatransfer.clipboard.SystemClipboard", ctx)
+            clip = self.ctx.ServiceManager.createInstanceWithContext(
+                "com.sun.star.datatransfer.clipboard.SystemClipboard", self.ctx)
             clip.setContents(img_transferable, self.clip_owner)
 
-            
+
+class ContextInterceptor(unohelper.Base, XContextMenuInterceptor):
+    def __init__ (self, ctx):
+        self.ctx = ctx
+
+    def notifyContextMenuExecute (self, event):
+        menu = event.ActionTriggerContainer
+        selection = event.Selection.getSelection()
+
+        if selection.supportsService("com.sun.star.text.TextGraphicObject"):
+            # TextGraphicObject implicitly supports XNamed
+            # (not shown in the supported service names)
+            img_name = selection.getName()
+
+            if img_name.startswith("$metadata-tag-do-not-edit$"):
+                num_items = menu.Count
+
+                separator = menu.createInstance("com.sun.star.ui.ActionTriggerSeparator")
+                separator.SeparatorType = LINE
+
+                menu.insertByIndex(num_items + 0, separator)
+
+                menu_item = menu.createInstance("com.sun.star.ui.ActionTrigger")
+                menu_item.setPropertyValue("Text", "Copy with metadata")
+                menu_item.setPropertyValue("CommandURL", u"se.commonsmachinery.extensions.paste_with_credit.Menu:CopyWithMetadata")
+                menu.insertByIndex(num_items + 1, menu_item)
+
+            return EXECUTE_MODIFIED
+        # otherwise
+        return IGNORED
+
+
+class PluginInitJob(unohelper.Base, XJob):
+    def __init__(self, ctx):
+        self.ctx = ctx
+
+    def execute(self, args):
+        desktop = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.frame.Desktop", self.ctx)
+
+        model = desktop.getCurrentComponent()
+        controller = model.getCurrentController()
+        context_interceptor = ContextInterceptor(self.ctx)
+        controller.registerContextMenuInterceptor(context_interceptor)
+
+
+class MenuHandler(unohelper.Base, XInitialization, XDispatchProvider, XDispatch):
+    def __init__(self, ctx):
+        self.ctx = ctx
+
+    def initialize(self, args):
+        pass
+
+    def queryDispatch(self, url, target_frame_name, search_flags):
+        if url.Protocol == "se.commonsmachinery.extensions.paste_with_credit.Menu:":
+            return self
+        return None
+
+    def queryDispatches(self, requests):
+        dispatches = [self.queryDispatch(r.FeatureURL, r.FrameName, r.SearchFlags) for r in requests]
+        return dispatches
+
+    def dispatch(self, url, args):
+        if url.Protocol == "se.commonsmachinery.extensions.paste_with_credit.Menu:":
+            if url.Path == "CopyWithMetadata":
+                job = CopyWithMetadataJob(self.ctx)
+                job.trigger(None)
+
+    def addStatusListener(self, control, url):
+        pass
+
+    def removeStatusListener(self, control, url):
+        pass
+
 
 g_ImplementationHelper = unohelper.ImplementationHelper()
 
-# job class as defined in the .xcu
 g_ImplementationHelper.addImplementation(
     PasteWithCreditJob,
     "se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob",
     ("com.sun.star.task.Job",)
 )
 
-# job class as defined in the .xcu
 g_ImplementationHelper.addImplementation(
     InsertCreditsJob,
     "se.commonsmachinery.extensions.paste_with_credit.InsertCreditsJob",
     ("com.sun.star.task.Job",)
+)
+
+g_ImplementationHelper.addImplementation(
+    CopyWithMetadataJob,
+    "se.commonsmachinery.extensions.paste_with_credit.CopyWithMetadataJob",
+    ("com.sun.star.task.Job",)
+)
+
+g_ImplementationHelper.addImplementation(
+    PluginInitJob,
+    "se.commonsmachinery.extensions.paste_with_credit.PluginInitJob",
+    ("com.sun.star.task.Job",)
+)
+
+g_ImplementationHelper.addImplementation(
+    MenuHandler,
+    "se.commonsmachinery.extensions.paste_with_credit.MenuHandler",
+    ("com.sun.star.frame.ProtocolHandler",)
 )
 
 if __name__ == "__main__":
@@ -595,7 +690,7 @@ if __name__ == "__main__":
         job.trigger(None)
 
         if job.clip_owner:
-            print('took clipboard ownership')            
+            print('took clipboard ownership')
             while job.clip_owner.is_owner:
                 try:
                     time.sleep(1)
@@ -605,7 +700,7 @@ if __name__ == "__main__":
             print("lost clipboard ownership")
         else:
             print('could not get clipboard ownership, probably no image selected')
-            
+
     elif cmd == 'credit':
         job = InsertCreditsJob(ctx)
         job.trigger(None)
