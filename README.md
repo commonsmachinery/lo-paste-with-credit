@@ -37,17 +37,35 @@ License
 Copyright 2013 Commons Machinery http://commonsmachinery.se/
 
 Author(s): Artem Popov <artfwo@commonsmachinery.se>,
+           Peter Liljenberg <peter@commonsmachinery.se>
 
 Distributed under an GPLv2 license, please see the LICENSE file for details.
 
-RDFMetadata
------------
+Bundled libraries
+-----------------
 
-This repository includes parts of RDFMetadata library from
-https://github.com/commonsmachinery/rdf_metadata
+The extension package (`paste_with_credit.oxt`) includes the following libraries:
 
-Copyright 2013 Commons Machinery http://commonsmachinery.se/
+**libcredit**
 
-Distributed under an GPLv2 license, please see LICENSE in the top dir.
+    https://github.com/commonsmachinery/libcredit
+    Copyright 2013 Commons Machinery http://commonsmachinery.se/
+    License: GPL license, version 2
 
-Contact: Peter Liljenberg peter@commonsmachinery.se
+**RDFLib**
+
+    https://github.com/RDFLib/rdflib
+    Copyright (c) 2002-2012, RDFLib Team
+    License: BSD license, 3-clause version
+
+**isodate**
+
+    https://github.com/gweis/isodate
+    Copyright 2009, Gerhard Weis
+    License: BSD license, 3-clause version
+
+**pyparsing**
+
+    http://sourceforge.net/projects/pyparsing/
+    Copyright (c) 2003-2013  Paul T. McGuire
+    License: MIT license
