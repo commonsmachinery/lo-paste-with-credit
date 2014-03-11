@@ -4,7 +4,7 @@
   <identifier value="se.commonsmachinery.extensions.paste_with_credit"/>
   <platform value="all"/>
   <dependencies>
-    <OpenOffice.org-minimal-version value="3.3" d:name="OpenOffice.org 3.3"/>
+    <OpenOffice.org-minimal-version value="3.5" d:name="OpenOffice.org 3.5"/>
   </dependencies>
   <display-name>
     <name lang="en">Paste with credit</name>
