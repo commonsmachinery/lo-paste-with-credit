@@ -34,6 +34,7 @@ from com.sun.star.frame import XDispatchProvider
 from com.sun.star.ui import XContextMenuInterceptor
 from com.sun.star.ui.ContextMenuInterceptorAction import IGNORED
 from com.sun.star.ui.ContextMenuInterceptorAction import EXECUTE_MODIFIED
+from com.sun.star.ui.ContextMenuInterceptorAction import CONTINUE_MODIFIED
 
 from com.sun.star.text.ControlCharacter import PARAGRAPH_BREAK
 from com.sun.star.text.TextContentAnchorType import AS_CHARACTER
@@ -565,30 +566,57 @@ class ContextInterceptor(unohelper.Base, XContextMenuInterceptor):
     def __init__ (self, ctx):
         self.ctx = ctx
 
-    def notifyContextMenuExecute (self, event):
+    def notifyContextMenuExecute(self, event):
         menu = event.ActionTriggerContainer
-        selection = event.Selection.getSelection()
+        controller = event.Selection
+        selection = controller.getSelection()
+        model = controller.getModel()
+        menu_items = []
 
-        if selection.supportsService("com.sun.star.text.TextGraphicObject"):
+        # Impress document controller shows up as com.sun.star.drawing.DrawingDocumentDrawView,
+        # so we rely on the model to get the idea of current document type
+        canPasteText = model.supportsService("com.sun.star.text.TextDocument") and \
+                       selection.supportsService("com.sun.star.text.TextRanges")
+        canPastePresentation = model.supportsService("com.sun.star.presentation.PresentationDocument")
+
+        if canPasteText or canPastePresentation:
+            clip = self.ctx.ServiceManager.createInstanceWithContext(
+                "com.sun.star.datatransfer.clipboard.SystemClipboard", self.ctx)
+            mimeTypes = [d.MimeType for d in clip.getContents().getTransferDataFlavors()]
+
+            if "image/png" in mimeTypes and "application/rdf+xml" in mimeTypes:
+                item = menu.createInstance("com.sun.star.ui.ActionTrigger")
+                item.setPropertyValue("Text", "Paste with credits")
+                item.setPropertyValue("CommandURL", u"se.commonsmachinery.extensions.paste_with_credit.Menu:PasteWithCredit")
+                menu_items.append(item)
+
+        # selection can be None in Draw and Impress sometimes
+        if selection is not None and \
+           selection.supportsService("com.sun.star.text.TextGraphicObject"):
             # TextGraphicObject implicitly supports XNamed
             # (not shown in the supported service names)
             img_name = selection.getName()
 
             if img_name.startswith("$metadata-tag-do-not-edit$"):
-                num_items = menu.Count
+                item = menu.createInstance("com.sun.star.ui.ActionTrigger")
+                item.setPropertyValue("Text", "Copy with credits")
+                item.setPropertyValue("CommandURL", u"se.commonsmachinery.extensions.paste_with_credit.Menu:CopyWithMetadata")
+                menu_items.append(item)
 
+        if len(menu_items) > 0:
+            item_count = menu.Count
+
+            if len(menu_items) > 1:
                 separator = menu.createInstance("com.sun.star.ui.ActionTriggerSeparator")
                 separator.SeparatorType = LINE
+                menu_items.insert(1, separator)
+            #menu.insertByIndex(item_count + 0, separator)
 
-                menu.insertByIndex(num_items + 0, separator)
+            for i, item in enumerate(menu_items, start=item_count):
+                menu.insertByIndex(i, item)
 
-                menu_item = menu.createInstance("com.sun.star.ui.ActionTrigger")
-                menu_item.setPropertyValue("Text", "Copy with metadata")
-                menu_item.setPropertyValue("CommandURL", u"se.commonsmachinery.extensions.paste_with_credit.Menu:CopyWithMetadata")
-                menu.insertByIndex(num_items + 1, menu_item)
+            return CONTINUE_MODIFIED
 
-            return EXECUTE_MODIFIED
-        # otherwise
         return IGNORED
 
 
@@ -626,6 +654,9 @@ class MenuHandler(unohelper.Base, XInitialization, XDispatchProvider, XDispatch)
         if url.Protocol == "se.commonsmachinery.extensions.paste_with_credit.Menu:":
             if url.Path == "CopyWithMetadata":
                 job = CopyWithMetadataJob(self.ctx)
+                job.trigger(None)
+            elif url.Path == "PasteWithCredit":
+                job = PasteWithCreditJob(self.ctx)
                 job.trigger(None)
 
     def addStatusListener(self, control, url):

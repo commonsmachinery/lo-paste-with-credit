@@ -6,9 +6,10 @@ SOURCES = \
 	Addons.xcu \
 	Jobs.xcu \
 	ProtocolHandler.xcu \
+	Accelerators.xcu \
 	cm-paste.py
 
-ADDITIONAL_PATHS = pythonpath
+ADDITIONAL_PATHS = pythonpath icons
 
 EXTENSION = paste_with_credit.oxt
 

@@ -16,19 +16,22 @@ Installation
 Usage
 -----
 
-To paste an image and automatically add credit data:
+To paste an image and automatically add credits:
 
-1. Copy an image with metadata from Firefox.
-2. Paste via "Edit->Paste with credit".
+1. Copy an image with credits from Firefox.
+2. Paste via "Edit->Paste with credits" or click "Paste with credits" button
+   next to the regular Paste button on the toolbar.
 
-To copy image with credit metadata back to clipboard:
+Note: Credits won't show in Impress, see below for how to make them visible.
+
+To copy image with credit metadata back to clipboard (Writer-only):
 
 1. Right-click the image.
-2. Choose "Copy with metadata"
+2. Choose "Copy with credits"
 
 To generate a credits block in Impress:
 
-1. Paste one or more images using "Edit->Paste with credit"
+1. Paste one or more images using "Edit->Paste with credits"
 2. Choose "Insert->Credits" from the main menu.
 
 License
@@ -40,6 +43,12 @@ Author(s): Artem Popov <artfwo@commonsmachinery.se>,
            Peter Liljenberg <peter@commonsmachinery.se>
 
 Distributed under an GPLv2 license, please see the LICENSE file for details.
+
+Icon by Ilsur Aptukov from The Noun Project
+Published at http://www.thenounproject.com/term/clipboard/28307/
+Licensed under Creative Commons Attribution 3.0 license
+for more information see http://creativecommons.org/licenses/by/3.0/us/
+
 
 Bundled libraries
 -----------------

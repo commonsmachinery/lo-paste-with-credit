@@ -26,7 +26,7 @@
                 <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
-                <value xml:lang="en">Paste with credit</value>
+                <value xml:lang="en">Paste with credits</value>
               </prop>
               <prop oor:name="Context" oor:type="xs:string">
                 <value>com.sun.star.text.TextDocument</value>
@@ -54,7 +54,7 @@
                 <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
-                <value xml:lang="en">Paste with credit</value>
+                <value xml:lang="en">Paste with credits</value>
               </prop>
               <prop oor:name="Context" oor:type="xs:string">
                 <value>com.sun.star.presentation.PresentationDocument</value>
@@ -120,7 +120,7 @@
                 <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
-                <value>Paste with credit</value>
+                <value>Paste with credits</value>
               </prop>
             </node>
           </node>
@@ -148,10 +148,28 @@
                 <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
-                <value>Paste with credit</value>
+                <value>Paste with credits</value>
               </prop>
             </node>
           </node>
+        </node>
+      </node>
+    </node>
+    <!--
+      Images
+    -->
+    <node oor:name="Images">
+      <node oor:name="se.commonsmachinery.extensions.paste_with_credit.image1" oor:op="replace">
+        <prop oor:name="URL">
+          <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+        </prop>
+        <node oor:name="UserDefinedImages">
+          <prop oor:name="ImageSmallURL" oor:type="xs:string">
+            <value>%origin%/icons/icon_16.png</value>
+          </prop>
+          <prop oor:name="ImageBigURL" oor:type="xs:string">
+            <value>%origin%/icons/icon_24.png</value>
+          </prop>
         </node>
       </node>
     </node>
