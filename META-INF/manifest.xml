@@ -10,4 +10,8 @@
                        manifest:full-path ="ProtocolHandler.xcu"/>
   <manifest:file-entry manifest:media-type="application/vnd.sun.star.configuration-data"
                        manifest:full-path ="Accelerators.xcu"/>
+  <manifest:file-entry manifest:media-type="application/vnd.sun.star.configuration-data"
+                       manifest:full-path="OptionsDialog.xcu"/>
+  <manifest:file-entry manifest:media-type="application/vnd.sun.star.configuration-schema"
+                       manifest:full-path="OptionsDialog.xcs"/>
 </manifest:manifest>

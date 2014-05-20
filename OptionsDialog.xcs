@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<oor:component-schema xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" oor:name="OptionsDialog" oor:package="se.commonsmachinery.pwc" xml:lang="en">
+  <info>
+    <author></author>
+    <desc>Contains the options data used for the pwc extension.</desc>
+  </info>
+  <templates>
+    <group oor:name="Leaf">
+      <info>
+        <desc>The data for one leaf.</desc>
+      </info>
+      <prop oor:name="TextFieldCatalog" oor:type="xs:string">
+        <value>https://dev.commonsmachinery.se</value>
+      </prop>
+      <prop oor:name="TextFieldUser" oor:type="xs:string">
+        <value></value>
+      </prop>
+      <prop oor:name="TextFieldPassword" oor:type="xs:string">
+        <value></value>
+      </prop>
+    </group>
+  </templates>
+  <component>
+    <group oor:name="Leaves">
+      <node-ref oor:name="OptionsDialog" oor:node-type="Leaf" />
+    </group>
+  </component>
+</oor:component-schema>

@@ -5,7 +5,7 @@
       Menu merge
     -->
     <node oor:name="OfficeMenuBarMerging">
-      <node oor:name="se.commonsmachinery.extensions.paste_with_credit" oor:op="replace">
+      <node oor:name="se.commonsmachinery.pwc" oor:op="replace">
         <!-- writer menu -->
         <node oor:name="M1" oor:op="replace">
           <prop oor:name="MergePoint">
@@ -23,7 +23,7 @@
           <node oor:name="MenuItems">
             <node oor:name="I1" oor:op="replace">
               <prop oor:name="URL">
-                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+                <value>service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
                 <value xml:lang="en">Paste with credits</value>
@@ -51,7 +51,7 @@
           <node oor:name="MenuItems">
             <node oor:name="I2" oor:op="replace">
               <prop oor:name="URL">
-                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+                <value>service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
                 <value xml:lang="en">Paste with credits</value>
@@ -79,7 +79,7 @@
           <node oor:name="MenuItems">
             <node oor:name="I3" oor:op="replace">
               <prop oor:name="URL">
-                <value>service:se.commonsmachinery.extensions.paste_with_credit.InsertCreditsJob?execute</value>
+                <value>service:se.commonsmachinery.pwc.InsertCreditsJob?execute</value>
               </prop>
               <prop oor:name="Title">
                 <value xml:lang="en">Credits</value>
@@ -96,7 +96,7 @@
       Toolbar merge
     -->
     <node oor:name="OfficeToolbarMerging">
-      <node oor:name="se.commonsmachinery.extensions.paste_with_credit" oor:op="replace">
+      <node oor:name="se.commonsmachinery.pwc" oor:op="replace">
         <!-- writer toolbar -->
         <node oor:name="T1" oor:op="replace">
           <prop oor:name="MergeToolBar">
@@ -117,7 +117,7 @@
           <node oor:name="ToolBarItems">
             <node oor:name="B1" oor:op="replace">
               <prop oor:name="URL">
-                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+                <value>service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
                 <value>Paste with credits</value>
@@ -145,7 +145,7 @@
           <node oor:name="ToolBarItems">
             <node oor:name="B2" oor:op="replace">
               <prop oor:name="URL">
-                <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+                <value>service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
                 <value>Paste with credits</value>
@@ -159,9 +159,9 @@
       Images
     -->
     <node oor:name="Images">
-      <node oor:name="se.commonsmachinery.extensions.paste_with_credit.image1" oor:op="replace">
+      <node oor:name="se.commonsmachinery.pwc.image1" oor:op="replace">
         <prop oor:name="URL">
-          <value>service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+          <value>service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
         </prop>
         <node oor:name="UserDefinedImages">
           <prop oor:name="ImageSmallURL" oor:type="xs:string">

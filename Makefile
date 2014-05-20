@@ -7,9 +7,11 @@ SOURCES = \
 	Jobs.xcu \
 	ProtocolHandler.xcu \
 	Accelerators.xcu \
+	OptionsDialog.xcu \
+	OptionsDialog.xcs \
 	cm-paste.py
 
-ADDITIONAL_PATHS = pythonpath icons
+ADDITIONAL_PATHS = pythonpath icons dialogs
 
 EXTENSION = paste_with_credit.oxt
 
@@ -24,7 +26,7 @@ clean:
 	rm $(EXTENSION)
 
 install:
-	unopkg add $(EXTENSION)
+	unopkg add --force $(EXTENSION)
 
 uninstall:
 	unopkg remove $(EXTENSION)

@@ -4,7 +4,7 @@
     xmlns:l="http://libreoffice.org/extensions/description/2011"
     xmlns:xlink="http://www.w3.org/1999/xlink">
   <version value="0.3.5"/>
-  <identifier value="se.commonsmachinery.extensions.paste_with_credit"/>
+  <identifier value="se.commonsmachinery.pwc"/>
   <platform value="all"/>
   <dependencies>
     <OpenOffice.org-minimal-version value="3.3" d:name="OpenOffice.org 3.3"/>
@@ -12,4 +12,10 @@
   <display-name>
     <name lang="en">Paste with credits</name>
   </display-name>
+  <publisher>
+    <name lang="en" xlink:href="http://commonsmachinery.se/">Commons Machinery</name>
+  </publisher>
+  <icon>
+    <default xlink:href="icons/logo.png" />
+  </icon>
 </description>

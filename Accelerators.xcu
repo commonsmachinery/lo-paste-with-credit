@@ -8,7 +8,7 @@
       <node oor:name="com.sun.star.text.TextDocument">
         <node oor:name="V_MOD2_MOD1" oor:op="replace">
           <prop oor:name="Command">
-            <value xml:lang="en-US">service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+            <value xml:lang="en">service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
           </prop>
         </node>
       </node>
@@ -18,7 +18,7 @@
       <node oor:name="com.sun.star.presentation.PresentationDocument">
         <node oor:name="V_MOD2_MOD1" oor:op="replace">
           <prop oor:name="Command">
-            <value xml:lang="en-US">service:se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob?execute</value>
+            <value xml:lang="en">service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
           </prop>
         </node>
       </node>

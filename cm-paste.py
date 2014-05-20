@@ -28,14 +28,6 @@ from com.sun.star.datatransfer import DataFlavor
 from com.sun.star.datatransfer import XTransferable
 from com.sun.star.datatransfer.clipboard import XClipboardOwner
 
-from com.sun.star.lang import XInitialization
-from com.sun.star.frame import XDispatch
-from com.sun.star.frame import XDispatchProvider
-from com.sun.star.ui import XContextMenuInterceptor
-from com.sun.star.ui.ContextMenuInterceptorAction import IGNORED
-from com.sun.star.ui.ContextMenuInterceptorAction import EXECUTE_MODIFIED
-from com.sun.star.ui.ContextMenuInterceptorAction import CONTINUE_MODIFIED
-
 from com.sun.star.text.ControlCharacter import PARAGRAPH_BREAK
 from com.sun.star.text.TextContentAnchorType import AS_CHARACTER
 from com.sun.star.text.TextContentAnchorType import AT_PARAGRAPH
@@ -562,6 +554,11 @@ class CopyWithMetadataJob(unohelper.Base, XJobExecutor):
             clip.setContents(img_transferable, self.clip_owner)
 
 
+from com.sun.star.ui import XContextMenuInterceptor
+from com.sun.star.ui.ContextMenuInterceptorAction import IGNORED
+from com.sun.star.ui.ContextMenuInterceptorAction import EXECUTE_MODIFIED
+from com.sun.star.ui.ContextMenuInterceptorAction import CONTINUE_MODIFIED
+
 class ContextInterceptor(unohelper.Base, XContextMenuInterceptor):
     def __init__ (self, ctx):
         self.ctx = ctx
@@ -587,7 +584,7 @@ class ContextInterceptor(unohelper.Base, XContextMenuInterceptor):
             if "image/png" in mimeTypes and "application/rdf+xml" in mimeTypes:
                 item = menu.createInstance("com.sun.star.ui.ActionTrigger")
                 item.setPropertyValue("Text", "Paste with credits")
-                item.setPropertyValue("CommandURL", u"se.commonsmachinery.extensions.paste_with_credit.Menu:PasteWithCredit")
+                item.setPropertyValue("CommandURL", u"se.commonsmachinery.pwc.Menu:PasteWithCredit")
                 menu_items.append(item)
 
         # selection can be None in Draw and Impress sometimes
@@ -600,7 +597,7 @@ class ContextInterceptor(unohelper.Base, XContextMenuInterceptor):
             if img_name.startswith("$metadata-tag-do-not-edit$"):
                 item = menu.createInstance("com.sun.star.ui.ActionTrigger")
                 item.setPropertyValue("Text", "Copy with credits")
-                item.setPropertyValue("CommandURL", u"se.commonsmachinery.extensions.paste_with_credit.Menu:CopyWithMetadata")
+                item.setPropertyValue("CommandURL", u"se.commonsmachinery.pwc.Menu:CopyWithMetadata")
                 menu_items.append(item)
 
         if len(menu_items) > 0:
@@ -634,6 +631,10 @@ class PluginInitJob(unohelper.Base, XJob):
         controller.registerContextMenuInterceptor(context_interceptor)
 
 
+from com.sun.star.lang import XInitialization
+from com.sun.star.frame import XDispatch
+from com.sun.star.frame import XDispatchProvider
+
 class MenuHandler(unohelper.Base, XInitialization, XDispatchProvider, XDispatch):
     def __init__(self, ctx):
         self.ctx = ctx
@@ -642,7 +643,7 @@ class MenuHandler(unohelper.Base, XInitialization, XDispatchProvider, XDispatch)
         pass
 
     def queryDispatch(self, url, target_frame_name, search_flags):
-        if url.Protocol == "se.commonsmachinery.extensions.paste_with_credit.Menu:":
+        if url.Protocol == "se.commonsmachinery.pwc.Menu:":
             return self
         return None
 
@@ -651,7 +652,7 @@ class MenuHandler(unohelper.Base, XInitialization, XDispatchProvider, XDispatch)
         return dispatches
 
     def dispatch(self, url, args):
-        if url.Protocol == "se.commonsmachinery.extensions.paste_with_credit.Menu:":
+        if url.Protocol == "se.commonsmachinery.pwc.Menu:":
             if url.Path == "CopyWithMetadata":
                 job = CopyWithMetadataJob(self.ctx)
                 job.trigger(None)
@@ -666,36 +667,165 @@ class MenuHandler(unohelper.Base, XInitialization, XDispatchProvider, XDispatch)
         pass
 
 
+from com.sun.star.awt import XContainerWindowEventHandler
+from com.sun.star.lang import XServiceInfo
+from com.sun.star.lang import IllegalArgumentException
+from com.sun.star.uno import Exception as UnoException
+from com.sun.star.beans.PropertyState import DIRECT_VALUE
+
+class OptionsEventHandler(unohelper.Base, XContainerWindowEventHandler, XServiceInfo):
+    supported_window_names = ["OptionsDialog"];
+    control_names = ["TextFieldCatalog", "TextFieldUser", "TextFieldPassword"]
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.access_leaves = ConfigurationAccess.createUpdateAccess(ctx,
+            "/se.commonsmachinery.pwc.OptionsDialog/Leaves");
+
+    def getSupportedMethodNames(self):
+        return ("external_event", )
+
+    def callHandlerMethod(self, window, event, method):
+        if method == "external_event":
+            return self.handle_external_event(window, event)
+
+    def handle_external_event(self, window, event):
+        method = str(event)
+        if method == "ok":
+            self.save_data(window);
+        elif method == "back" or method == "initialize":
+            self.load_data(window);
+        return True
+
+    def save_data(self, window):
+        window_name = self.get_window_name(window)
+        if window_name is None:
+            raise IllegalArgumentException("The window is not supported by this handler", self, -1)
+
+        for control_name in self.control_names:
+            control = window.getControl(control_name);
+            if control is None:
+                continue
+
+            prop = control.getModel()
+            if prop is None:
+                raise UnoException("Could not get XPropertySet from control.", self);
+
+            try:
+                if control_name.startswith("Text"):
+                    value = prop.getPropertyValue("Text")
+                elif control_name.startswith("chk"):
+                    value = prop.getPropertyValue("State")
+                elif control_name.startswith("lst"):
+                    # TODO: add "Selected" to property keys
+                    pass
+            except IllegalArgumentException as e:
+                print(e)
+                raise IllegalArgumentException("Wrong property type.", self, -1);
+
+            leaf = self.access_leaves.getByName(window_name)
+            # TODO: use property keys to handle list values
+            leaf.setPropertyValue(control_name, value)
+
+        self.access_leaves.commitChanges()
+
+    def load_data(self, window):
+        window_name = self.get_window_name(window)
+        if window_name is None:
+            raise IllegalArgumentException("The window is not supported by this handler", self, -1)
+
+        for control_name in self.control_names:
+            leaf = self.access_leaves.getByName(window_name)
+
+            value = leaf.getPropertyValue(control_name);
+            control = window.getControl(control_name);
+            if control is None:
+                continue
+
+            prop = control.getModel()
+            if prop is None:
+                raise UnoException("Could not get XPropertySet from control.", self);
+
+            if control_name.startswith("Text"):
+                prop.setPropertyValue("Text", value)
+            elif control_name.startswith("chk"):
+                prop.setPropertyValue("State", value)
+            elif control_name.startswith("lst"):
+                prop.setPropertyValue("StringItemList", value)
+                value = leaf.getPropertyValue(control_name + "Selected")
+                prop.setPropertyValue("SelectedItems", value)
+
+    def get_window_name(self, window):
+        if window is None:
+            raise IllegalArgumentException("Method external_event requires that a window is passed as argument", self, -1)
+        window_name = window.getModel().getPropertyValue("Name")
+
+        model = window.getModel()
+        if model is None:
+            raise UnoException("Cannot obtain XControlModel from XWindow in method external_event.", self);
+
+        window_name = model.getPropertyValue("Name");
+        if window_name in self.supported_window_names:
+            return window_name
+        else:
+            return None
+
+class ConfigurationAccess(object):
+    @staticmethod
+    def createUpdateAccess(ctx, path):
+        try:
+            config = ctx.getServiceManager().createInstanceWithContext(
+                "com.sun.star.configuration.ConfigurationProvider", ctx)
+        except UnoException as e:
+            print(e)
+            return None
+
+        args = (PropertyValue("nodepath", 0, path, DIRECT_VALUE), )
+        try:
+            access = config.createInstanceWithArguments("com.sun.star.configuration.ConfigurationUpdateAccess", args)
+        except UnoException as e:
+            print(e)
+            return None
+
+        return access
+
+
 g_ImplementationHelper = unohelper.ImplementationHelper()
 
 g_ImplementationHelper.addImplementation(
     PasteWithCreditJob,
-    "se.commonsmachinery.extensions.paste_with_credit.PasteWithCreditJob",
+    "se.commonsmachinery.pwc.PasteWithCreditJob",
     ("com.sun.star.task.Job",)
 )
 
 g_ImplementationHelper.addImplementation(
     InsertCreditsJob,
-    "se.commonsmachinery.extensions.paste_with_credit.InsertCreditsJob",
+    "se.commonsmachinery.pwc.InsertCreditsJob",
     ("com.sun.star.task.Job",)
 )
 
 g_ImplementationHelper.addImplementation(
     CopyWithMetadataJob,
-    "se.commonsmachinery.extensions.paste_with_credit.CopyWithMetadataJob",
+    "se.commonsmachinery.pwc.CopyWithMetadataJob",
     ("com.sun.star.task.Job",)
 )
 
 g_ImplementationHelper.addImplementation(
     PluginInitJob,
-    "se.commonsmachinery.extensions.paste_with_credit.PluginInitJob",
+    "se.commonsmachinery.pwc.PluginInitJob",
     ("com.sun.star.task.Job",)
 )
 
 g_ImplementationHelper.addImplementation(
     MenuHandler,
-    "se.commonsmachinery.extensions.paste_with_credit.MenuHandler",
+    "se.commonsmachinery.pwc.MenuHandler",
     ("com.sun.star.frame.ProtocolHandler",)
+)
+
+g_ImplementationHelper.addImplementation(
+    OptionsEventHandler,
+    "se.commonsmachinery.pwc.OptionsEventHandler",
+    ("com.sun.star.awt.XContainerWindowEventHandler",)
 )
 
 if __name__ == "__main__":

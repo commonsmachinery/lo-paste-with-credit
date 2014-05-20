@@ -6,7 +6,7 @@
   <node oor:name="Jobs">
     <node oor:name="PluginInitJob" oor:op="replace">
       <prop oor:name="Service">
-        <value>se.commonsmachinery.extensions.paste_with_credit.PluginInitJob</value>
+        <value>se.commonsmachinery.pwc.PluginInitJob</value>
       </prop>
     </node>
   </node>
