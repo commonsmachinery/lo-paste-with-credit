@@ -116,7 +116,7 @@ def json2graph(jsondata):
                 elif o["type"] == "literal":
                     obj = rdflib.Literal(o["value"])
                 else:
-                    raise RuntimeError("Reading bnodes not implemented for JSON")
+                    obj = rdflib.BNode(o["value"])
                 g.add((rdflib.URIRef(s), rdflib.URIRef(p), obj))
     return g
 
@@ -960,14 +960,17 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
             cem = json2graph(source["cachedExternalMetadataGraph"])
             metadata = json2graph(source["metadataGraph"])
             resource = source["resource"]
-            img_src = next(metadata[next(metadata.subjects()):rdflib.URIRef("http://catalog.commonsmachinery.se/ns#imageSrc"):])
-
-            credit = libcredit.Credit(cem, subject=resource)
-            credit_writer = libcredit.TextCreditFormatter()
-            credit.format(credit_writer, source_depth=0)
-            source_list.addItem(credit_writer.get_text(), -1)
-
-            self.sources.append((resource, img_src, cem))
+            try:
+                img_src = next(metadata[next(metadata.subjects()):rdflib.URIRef("http://catalog.commonsmachinery.se/ns#imageSrc"):])
+            except StopIteration:
+                # No image source, so ignore this one
+                pass
+            else:
+                credit = libcredit.Credit(cem, subject=resource)
+                credit_writer = libcredit.TextCreditFormatter()
+                credit.format(credit_writer, source_depth=0)
+                source_list.addItem(credit_writer.get_text(), -1)
+                self.sources.append((resource, img_src, cem))
 
         source_list.selectItemPos(0, True)
 
@@ -1165,6 +1168,10 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == 'paste':
         job = PasteWithCreditJob(ctx)
+        job.trigger(None)
+
+    elif cmd == 'catalog':
+        job = PasteFromCatalogJob(ctx)
         job.trigger(None)
 
     elif cmd == 'copy':
