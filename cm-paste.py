@@ -10,6 +10,9 @@
 # Distributed under an GPLv2 license, please see LICENSE in the top dir.
 
 import libcredit
+import rdflib
+import requests
+
 from xml.dom import minidom
 import tempfile, os
 import uuid
@@ -103,6 +106,19 @@ def get_image_metadata(ctx, model, name):
 
     return str(ss)
 
+def json2graph(jsondata):
+    g = rdflib.Graph()
+    for s in jsondata:
+        for p in jsondata[s]:
+            for o in jsondata[s][p]:
+                if o["type"] == "uri":
+                    obj = rdflib.URIRef(o["value"])
+                elif o["type"] == "literal":
+                    obj = rdflib.Literal(o["value"])
+                else:
+                    raise RuntimeError("Reading bnodes not implemented for JSON")
+                g.add((rdflib.URIRef(s), rdflib.URIRef(p), obj))
+    return g
 
 class LOCreditFormatter(libcredit.CreditFormatter):
     """
@@ -790,10 +806,315 @@ class ConfigurationAccess(object):
         return access
 
 
+from com.sun.star.awt.MessageBoxType import MESSAGEBOX
+from com.sun.star.awt.MessageBoxType import INFOBOX
+from com.sun.star.awt.MessageBoxType import WARNINGBOX
+from com.sun.star.awt.MessageBoxType import ERRORBOX
+from com.sun.star.awt.MessageBoxType import ERRORBOX
+from com.sun.star.awt.MessageBoxType import QUERYBOX
+from com.sun.star.awt.MessageBoxButtons import BUTTONS_OK
+from com.sun.star.awt.MessageBoxButtons import DEFAULT_BUTTON_OK
+
+# this should be compatible with both 3.5 and 4.x
+# adapted from https://wiki.openoffice.org/wiki/Python/Transfer_from_Basic_to_Python#Message_Box
+def messagebox(ctx, parent, message, title, message_type, buttons):
+    """ Show message in message box. """
+
+    def check_method_parameter(ctx, interface_name, method_name, param_index, param_type):
+        """ Check the method has specific type parameter at the specific position. """
+        cr = ctx.getServiceManager().createInstanceWithContext("com.sun.star.reflection.CoreReflection", ctx)
+        try:
+            idl = cr.forName(interface_name)
+            m = idl.getMethod(method_name)
+            if m:
+                info = m.getParameterInfos()[param_index]
+                return info.aType.getName() == param_type
+        except:
+            pass
+        return False
+
+    toolkit = parent.getToolkit()
+    older_imple = check_method_parameter(
+        ctx, "com.sun.star.awt.XMessageBoxFactory", "createMessageBox",
+        1, "com.sun.star.awt.Rectangle")
+    if older_imple:
+        msgbox = toolkit.createMessageBox(
+            parent, Rectangle(), message_type, buttons, title, message)
+    else:
+        message_type = {
+            "messbox": MESSAGEBOX,
+            "infobox": INFOBOX,
+            "warningbox": WARNINGBOX,
+            "errorbox": ERRORBOX,
+            "querybox": QUERYBOX
+        }[message_type]
+        msgbox = toolkit.createMessageBox(
+            parent, message_type, buttons, title, message)
+    n = msgbox.execute()
+    msgbox.dispose()
+    return n
+
+from com.sun.star.awt import XActionListener
+from com.sun.star.awt import XItemListener
+
+class DialogActionListener(unohelper.Base, XActionListener):
+    def __init__(self, job):
+        self.job = job
+
+    def actionPerformed(self, action_event):
+        command = action_event.ActionCommand
+        if command == "add":
+            pos = self.job.dialog.getControl("SourcesListBox").getSelectedItemPos()
+            source = self.job.sources[pos]
+            self.job.add_source(source)
+        elif command == "cancel":
+            pass
+        self.job.dialog.endExecute()
+
+class ListItemListener(unohelper.Base, XItemListener):
+    def __init__(self, job):
+        self.job = job
+
+    def itemStateChanged(self, item_event):
+        pos = item_event.Source.getSelectedItemPos()
+        if pos == -1:
+            self.job.dialog.getControl("CommandButtonAdd").setEnable(False)
+        else:
+            self.job.dialog.getControl("CommandButtonAdd").setEnable(True)
+
+class ListActionListener(unohelper.Base, XActionListener):
+    def actionPerformed(self, item_event):
+        pos = item_event.Source.getSelectedItemPos()
+        if pos == -1:
+            return
+        source = self.job.sources[pos]
+
+class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.access_leaves = ConfigurationAccess.createUpdateAccess(ctx,
+            "/se.commonsmachinery.pwc.OptionsDialog/Leaves");
+        self.sources = []
+
+    def trigger(self, args):
+        dialog_provider = self.ctx.getServiceManager().createInstanceWithContext("com.sun.star.awt.DialogProvider", self.ctx)
+        self.dialog = dialog_provider.createDialog("vnd.sun.star.extension://se.commonsmachinery.pwc/dialogs/PasteFromCatalog.xdl")
+
+        action_listener = DialogActionListener(self)
+
+        control = self.dialog.getControl("CommandButtonAdd")
+        control.addActionListener(action_listener)
+        control.setActionCommand("add")
+        #control.setEnable(False)
+
+        control = self.dialog.getControl("CommandButtonCancel")
+        control.addActionListener(action_listener)
+        control.setActionCommand("cancel")
+
+        # load settings
+        leaf = self.access_leaves.getByName("OptionsDialog")
+        option_catalog = leaf.getPropertyValue("TextFieldCatalog")
+        option_user = leaf.getPropertyValue("TextFieldUser")
+        option_password = leaf.getPropertyValue("TextFieldPassword")
+        headers = {'Accept': 'application/json'}
+
+        # get user
+        try:
+            r = requests.get(option_catalog + "/users/current", headers=headers,
+                             auth=requests.auth.HTTPBasicAuth(option_user, option_password))
+        except requests.exceptions.RequestException as e:
+            self.error_message("Couldn't get user resource.\n\n{0}".format(e))
+            return
+
+        if r.status_code != 200:
+            self.error_message("Couldn't get user resource.\n\n{0}".format(r.text))
+            return
+
+        user_resource = r.url
+
+        # get list of sources
+        source_list = self.dialog.getControl("SourcesListBox")
+        source_list.addItemListener(ListItemListener(self))
+        source_list.addActionListener(ListActionListener())
+
+        try:
+            r = requests.get(user_resource + "/sources", headers=headers,
+                             auth=requests.auth.HTTPBasicAuth(option_user, option_password))
+        except requests.exceptions.RequestException as e:
+            self.error_message("Couldn't get sources for user.\n\n{0}".format(e))
+            return
+
+        def datekey(source):
+            if "updated" in source:
+                return source["updated"]
+            elif "added" in source:
+                return source["added"]
+            raise RuntimeError("Incomplete source entry")
+
+        raw_sources = r.json()
+        raw_sources.sort(key=datekey)
+        raw_sources.reverse()
+        self.sources = []
+
+        for source in raw_sources:
+            cem = json2graph(source["cachedExternalMetadataGraph"])
+            metadata = json2graph(source["metadataGraph"])
+            resource = source["resource"]
+            img_src = next(metadata[next(metadata.subjects()):rdflib.URIRef("http://catalog.commonsmachinery.se/ns#imageSrc"):])
+
+            credit = libcredit.Credit(cem, subject=resource)
+            credit_writer = libcredit.TextCreditFormatter()
+            credit.format(credit_writer, source_depth=0)
+            source_list.addItem(credit_writer.get_text(), -1)
+
+            self.sources.append((resource, img_src, cem))
+
+        source_list.selectItemPos(0, True)
+
+        self.dialog.execute()
+        self.dialog.dispose()
+
+    def error_message(self, message):
+        desktop = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.frame.Desktop", self.ctx)
+        frame = desktop.getCurrentFrame()
+        window = frame.getContainerWindow()
+        messagebox(self.ctx, window, message, "Error", "errorbox", BUTTONS_OK | DEFAULT_BUTTON_OK)
+
+    def add_source(self, source):
+        resource, img_src, cem = source
+
+        # fetch image
+        try:
+            r = requests.get(img_src)
+        except requests.exceptions.RequestException as e:
+            self.error_message("Couldn't get image.\n\n{0}".format(e))
+            return
+
+        if r.status_code != 200:
+            self.error_message("Couldn't get image.\n\n{0}".format(r.text))
+            return
+
+        # create graphic and descriptor
+        img_stream = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.io.SequenceInputStream", self.ctx)
+        img_stream.initialize((uno.ByteSequence(r.content),))
+        graphic_provider = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.graphic.GraphicProvider", self.ctx)
+
+        stream_property = PropertyValue()
+        stream_property.Name = "InputStream"
+        stream_property.Value = img_stream
+
+        descriptor = graphic_provider.queryGraphicDescriptor((stream_property,))
+        graphic = graphic_provider.queryGraphic((stream_property,))
+
+        # also create rdf for serializing to attributes
+        rdf = cem.serialize(format="xml")
+
+        # add image+metadata
+        desktop = self.ctx.ServiceManager.createInstanceWithContext(
+            "com.sun.star.frame.Desktop", self.ctx)
+
+        model = desktop.getCurrentComponent()
+        controller = model.getCurrentController()
+        img_size = descriptor.getPropertyValue("SizePixel")
+
+        if model.supportsService("com.sun.star.text.TextDocument"):
+            # Metadata is only supported in text documents
+            metadata = Metadata(self.ctx, model)
+
+            # create a frame to hold the image with caption
+            text_frame = model.createInstance("com.sun.star.text.TextFrame")
+            text_frame.setSize(Size(15000,400))
+            text_frame.setPropertyValue("AnchorType", AT_PARAGRAPH)
+
+            # duplicate current cursor
+            view_cursor = controller.getViewCursor()
+            cursor = view_cursor.getText().createTextCursorByRange(view_cursor)
+            cursor.gotoStartOfSentence(False)
+            cursor.gotoEndOfSentence(True)
+
+            # insert text frame
+            text = model.Text
+            text.insertTextContent(cursor, text_frame, 0)
+            frame_text = text_frame.getText()
+
+            cursor = frame_text.createTextCursor()
+
+            # Add a <text:bookmark> tag to serve as anchor for the RDF
+            # and give us a subject URI.  Ideally, we would get this
+            # from the image but that isn't possible with current
+            # APIs.
+
+            bookmark = model.createInstance("com.sun.star.text.Bookmark")
+            frame_text.insertTextContent(cursor, bookmark, False)
+            bookmark.ensureMetadataReference()
+            bookmark.setName(BOOKMARK_BASE_NAME + bookmark.LocalName)
+            cursor.gotoEnd(False)
+
+            # create a TextGraphicObject to hold the image
+            image = model.createInstance("com.sun.star.text.TextGraphicObject")
+            image.setPropertyValue("Graphic", graphic)
+            # hack to enlarge the tiny pasted images
+            image.setPropertyValue("Width", img_size.Width * 20)
+            image.setPropertyValue("Height", img_size.Height * 20)
+            image.setName(bookmark.getName())
+
+            frame_text.insertTextContent(cursor, image, False)
+
+            # add the credit as text below the image
+            credit = libcredit.Credit(rdf, subject=resource)
+            credit_writer = LOCreditFormatter(frame_text, cursor, metadata = metadata)
+            credit.format(credit_writer, subject_uri = bookmark.StringValue)
+
+            # scale the image to fit the frame
+            image.setPropertyValue("RelativeWidth", 100)
+            #image.setPropertyValue("RelativeHeight", 100)
+            image.setPropertyValue("IsSyncHeightToWidth", True)
+
+            # set image title (no sources)
+            credit_writer = libcredit.TextCreditFormatter()
+            credit.format(credit_writer, source_depth=0)
+            image.setPropertyValue("Title", credit_writer.get_text())
+
+            # set image title (credit with sources)
+            credit_writer = libcredit.TextCreditFormatter()
+            credit.format(credit_writer)
+            image.setPropertyValue("Description", credit_writer.get_text())
+
+            # DEBUG:
+            # metadata.dump_graph()
+
+        elif model.supportsService("com.sun.star.presentation.PresentationDocument"):
+            page = controller.getCurrentPage()
+
+            # begin pasting
+            shape = model.createInstance("com.sun.star.drawing.GraphicObjectShape")
+            shape.Graphic = graphic
+            shape.setSize(Size(img_size.Width * 20, img_size.Height * 20))
+
+            page.add(shape)
+
+            attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
+            attr.Value = rdf
+
+            attributes = shape.UserDefinedAttributes
+            attributes.insertByName("cm-metadata", attr)
+            shape.UserDefinedAttributes = attributes
+
+            size = shape.Size
+            shape.setPosition(Point(
+                int((page.Width - size.Width) / 2),
+                int((page.Height - size.Height) / 2))
+            )
+        return # add_source
+
 g_ImplementationHelper = unohelper.ImplementationHelper()
 
 g_ImplementationHelper.addImplementation(
-    PasteWithCreditJob,
+    #PasteWithCreditJob,
+    PasteFromCatalogJob,
     "se.commonsmachinery.pwc.PasteWithCreditJob",
     ("com.sun.star.task.Job",)
 )
