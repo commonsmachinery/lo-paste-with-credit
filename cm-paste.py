@@ -593,15 +593,10 @@ class ContextInterceptor(unohelper.Base, XContextMenuInterceptor):
         canPastePresentation = model.supportsService("com.sun.star.presentation.PresentationDocument")
 
         if canPasteText or canPastePresentation:
-            clip = self.ctx.ServiceManager.createInstanceWithContext(
-                "com.sun.star.datatransfer.clipboard.SystemClipboard", self.ctx)
-            mimeTypes = [d.MimeType for d in clip.getContents().getTransferDataFlavors()]
-
-            if "image/png" in mimeTypes and "application/rdf+xml" in mimeTypes:
-                item = menu.createInstance("com.sun.star.ui.ActionTrigger")
-                item.setPropertyValue("Text", "Paste with credits")
-                item.setPropertyValue("CommandURL", u"se.commonsmachinery.pwc.Menu:PasteWithCredit")
-                menu_items.append(item)
+            item = menu.createInstance("com.sun.star.ui.ActionTrigger")
+            item.setPropertyValue("Text", "Add image from elog.io")
+            item.setPropertyValue("CommandURL", u"se.commonsmachinery.pwc.Menu:PasteWithCredit")
+            menu_items.append(item)
 
         # selection can be None in Draw and Impress sometimes
         if selection is not None and \
@@ -673,7 +668,7 @@ class MenuHandler(unohelper.Base, XInitialization, XDispatchProvider, XDispatch)
                 job = CopyWithMetadataJob(self.ctx)
                 job.trigger(None)
             elif url.Path == "PasteWithCredit":
-                job = PasteWithCreditJob(self.ctx)
+                job = PasteFromCatalogJob(self.ctx)
                 job.trigger(None)
 
     def addStatusListener(self, control, url):

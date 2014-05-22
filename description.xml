@@ -10,7 +10,7 @@
     <OpenOffice.org-minimal-version value="3.3" d:name="OpenOffice.org 3.3"/>
   </dependencies>
   <display-name>
-    <name lang="en">Paste with credits</name>
+    <name lang="en">Elog.io catalog integration</name>
   </display-name>
   <publisher>
     <name lang="en" xlink:href="http://commonsmachinery.se/">Commons Machinery</name>

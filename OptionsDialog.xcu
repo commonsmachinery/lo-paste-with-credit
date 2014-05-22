@@ -15,7 +15,7 @@
             <value>se.commonsmachinery.pwc.options.leaf</value>
           </prop>
           <prop oor:name="Label">
-            <value xml:lang="en">Paste with credits</value>
+            <value xml:lang="en">Elog.io integration</value>
           </prop>
           <prop oor:name="OptionsPage">
             <value>%origin%/dialogs/OptionsDialog.xdl</value>

@@ -13,7 +13,7 @@ SOURCES = \
 
 ADDITIONAL_PATHS = pythonpath icons dialogs
 
-EXTENSION = paste_with_credit.oxt
+EXTENSION = elogio.oxt
 
 all: $(EXTENSION)
 
