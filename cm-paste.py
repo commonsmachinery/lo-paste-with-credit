@@ -879,11 +879,16 @@ class ListItemListener(unohelper.Base, XItemListener):
             self.job.dialog.getControl("CommandButtonAdd").setEnable(True)
 
 class ListActionListener(unohelper.Base, XActionListener):
+    def __init__(self, job):
+        self.job = job
+
     def actionPerformed(self, item_event):
         pos = item_event.Source.getSelectedItemPos()
         if pos == -1:
             return
         source = self.job.sources[pos]
+        self.job.add_source(source)
+        self.job.dialog.endExecute()
 
 class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
     def __init__(self, ctx):
@@ -931,7 +936,7 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
         # get list of sources
         source_list = self.dialog.getControl("SourcesListBox")
         source_list.addItemListener(ListItemListener(self))
-        source_list.addActionListener(ListActionListener())
+        source_list.addActionListener(ListActionListener(self))
 
         try:
             r = requests.get(user_resource + "/sources", headers=headers,
