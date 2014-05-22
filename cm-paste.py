@@ -444,7 +444,8 @@ class InsertCreditsJob(unohelper.Base, XJobExecutor):
                 shape = page.getByIndex(shape_num)
                 try:
                     rdf = shape.UserDefinedAttributes.getByName("cm-metadata").Value
-                    credit = libcredit.Credit(rdf)
+                    subject = shape.UserDefinedAttributes.getByName("cm-subject").Value
+                    credit = libcredit.Credit(rdf, subject=subject)
                     credits.append(credit)
                 except NoSuchElementException:
                     pass
@@ -1094,11 +1095,16 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
 
             page.add(shape)
 
+            attributes = shape.UserDefinedAttributes
+
             attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
             attr.Value = rdf
-
-            attributes = shape.UserDefinedAttributes
             attributes.insertByName("cm-metadata", attr)
+
+            attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
+            attr.Value = resource
+            attributes.insertByName("cm-subject", attr)
+
             shape.UserDefinedAttributes = attributes
 
             size = shape.Size
