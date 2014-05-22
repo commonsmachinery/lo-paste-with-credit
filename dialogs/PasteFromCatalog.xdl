@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE dlg:window PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "dialog.dtd">
-<dlg:window xmlns:dlg="http://openoffice.org/2000/dialog" xmlns:script="http://openoffice.org/2000/script" dlg:id="PasteFromCatalog" dlg:left="130" dlg:top="82" dlg:width="145" dlg:height="129" dlg:closeable="true" dlg:moveable="true">
+<dlg:window xmlns:dlg="http://openoffice.org/2000/dialog" xmlns:script="http://openoffice.org/2000/script" dlg:id="PasteFromCatalog" dlg:left="130" dlg:top="82" dlg:width="145" dlg:height="129" dlg:closeable="true" dlg:moveable="true" dlg:title="Add image from elog.io">
  <dlg:bulletinboard>
-  <dlg:menulist dlg:id="SourcesListBox" dlg:tab-index="0" dlg:left="7" dlg:top="16" dlg:width="130" dlg:height="79"/>
-  <dlg:button dlg:id="CommandButtonAdd" dlg:tab-index="1" dlg:left="68" dlg:top="109" dlg:width="35" dlg:height="14" dlg:value="Add"/>
+  <dlg:menulist dlg:id="SourcesListBox" dlg:tab-index="0" dlg:left="7" dlg:top="19" dlg:width="131" dlg:height="76"/>
+  <dlg:button dlg:id="CommandButtonAdd" dlg:tab-index="1" dlg:left="67" dlg:top="109" dlg:width="35" dlg:height="14" dlg:value="Add"/>
   <dlg:button dlg:id="CommandButtonCancel" dlg:tab-index="2" dlg:left="107" dlg:top="109" dlg:width="31" dlg:height="14" dlg:default="true" dlg:value="Cancel"/>
-  <dlg:text dlg:id="Label1" dlg:tab-index="3" dlg:left="9" dlg:top="4" dlg:width="77" dlg:height="12" dlg:value="Sources in catalog:"/>
-  <dlg:fixedline dlg:id="FixedLine1" dlg:tab-index="4" dlg:left="5" dlg:top="102" dlg:width="134" dlg:height="2"/>
+  <dlg:text dlg:id="Label1" dlg:tab-index="3" dlg:left="9" dlg:top="7" dlg:width="77" dlg:height="12" dlg:value="Sources in catalog:"/>
+  <dlg:fixedline dlg:id="FixedLine1" dlg:tab-index="4" dlg:left="6" dlg:top="102" dlg:width="133" dlg:height="2"/>
  </dlg:bulletinboard>
 </dlg:window>
