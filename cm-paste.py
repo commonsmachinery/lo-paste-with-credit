@@ -109,15 +109,20 @@ def get_image_metadata(ctx, model, name):
 def json2graph(jsondata):
     g = rdflib.Graph()
     for s in jsondata:
+        if s.startswith("_:"):
+            subject = rdflib.BNode("N" + s[2:])
+        else:
+            subject = rdflib.URIRef(s)
         for p in jsondata[s]:
+            predicate = rdflib.URIRef(p)
             for o in jsondata[s][p]:
                 if o["type"] == "uri":
-                    obj = rdflib.URIRef(o["value"])
+                    object = rdflib.URIRef(o["value"])
                 elif o["type"] == "literal":
-                    obj = rdflib.Literal(o["value"])
+                    object = rdflib.Literal(o["value"])
                 else:
-                    obj = rdflib.BNode(o["value"])
-                g.add((rdflib.URIRef(s), rdflib.URIRef(p), obj))
+                    object = rdflib.BNode("N" + o["value"][2:])
+                g.add((subject, predicate, object))
     return g
 
 class LOCreditFormatter(libcredit.CreditFormatter):
