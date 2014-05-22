@@ -833,6 +833,7 @@ def messagebox(ctx, parent, message, title, message_type, buttons):
         ctx, "com.sun.star.awt.XMessageBoxFactory", "createMessageBox",
         1, "com.sun.star.awt.Rectangle")
     if older_imple:
+        from com.sun.star.awt import Rectangle
         msgbox = toolkit.createMessageBox(
             parent, Rectangle(), message_type, buttons, title, message)
     else:
@@ -931,7 +932,7 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
             return
 
         if r.status_code != 200:
-            self.error_message("Couldn't get user resource.\n\n{0}\n\n{1}".format(r.statuscode, r.text))
+            self.error_message("Couldn't get user resource.\n\n{0}\n\n{1}".format(r.status_code, r.text))
             return
 
         user_resource = r.url
