@@ -802,12 +802,6 @@ class ConfigurationAccess(object):
         return access
 
 
-from com.sun.star.awt.MessageBoxType import MESSAGEBOX
-from com.sun.star.awt.MessageBoxType import INFOBOX
-from com.sun.star.awt.MessageBoxType import WARNINGBOX
-from com.sun.star.awt.MessageBoxType import ERRORBOX
-from com.sun.star.awt.MessageBoxType import ERRORBOX
-from com.sun.star.awt.MessageBoxType import QUERYBOX
 from com.sun.star.awt.MessageBoxButtons import BUTTONS_OK
 from com.sun.star.awt.MessageBoxButtons import DEFAULT_BUTTON_OK
 
@@ -838,11 +832,11 @@ def messagebox(ctx, parent, message, title, message_type, buttons):
             parent, Rectangle(), message_type, buttons, title, message)
     else:
         message_type = {
-            "messbox": MESSAGEBOX,
-            "infobox": INFOBOX,
-            "warningbox": WARNINGBOX,
-            "errorbox": ERRORBOX,
-            "querybox": QUERYBOX
+            "messbox": uno.Enum('com.sun.star.awt.MessageBoxType', 'MESSAGEBOX'),
+            "infobox": uno.Enum('com.sun.star.awt.MessageBoxType', 'INFOBOX'),
+            "warningbox": uno.Enum('com.sun.star.awt.MessageBoxType', 'WARNINGBOX'),
+            "errorbox": uno.Enum('com.sun.star.awt.MessageBoxType', 'ERRORBOX'),
+            "querybox": uno.Enum('com.sun.star.awt.MessageBoxType', 'QUERYBOX')
         }[message_type]
         msgbox = toolkit.createMessageBox(
             parent, message_type, buttons, title, message)
