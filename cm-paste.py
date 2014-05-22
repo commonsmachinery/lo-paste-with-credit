@@ -913,16 +913,20 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
         option_password = leaf.getPropertyValue("TextFieldPassword")
         headers = {'Accept': 'application/json'}
 
+        if option_user == "":
+            self.error_message("User is not configured.\n\nPlease specify an elog.io username in the extension preferences dialog.")
+
         # get user
         try:
             r = requests.get(option_catalog + "/users/current", headers=headers,
-                             auth=requests.auth.HTTPBasicAuth(option_user, option_password))
+                             auth=requests.auth.HTTPBasicAuth(option_user, option_password),
+                             verify=False)
         except requests.exceptions.RequestException as e:
-            self.error_message("Couldn't get user resource.\n\n{0}".format(e))
+            self.error_message("Couldn't get user resource.\n\n{0}\n\n{1}".format(type(e), e))
             return
 
         if r.status_code != 200:
-            self.error_message("Couldn't get user resource.\n\n{0}".format(r.text))
+            self.error_message("Couldn't get user resource.\n\n{0}\n\n{1}".format(r.statuscode, r.text))
             return
 
         user_resource = r.url
@@ -934,9 +938,10 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
 
         try:
             r = requests.get(user_resource + "/sources", headers=headers,
-                             auth=requests.auth.HTTPBasicAuth(option_user, option_password))
+                             auth=requests.auth.HTTPBasicAuth(option_user, option_password),
+                             verify=False)
         except requests.exceptions.RequestException as e:
-            self.error_message("Couldn't get sources for user.\n\n{0}".format(e))
+            self.error_message("Couldn't get sources for user.\n\n{0}\n\n{1}".format(type(e), e))
             return
 
         def datekey(source):
@@ -984,7 +989,7 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
 
         # fetch image
         try:
-            r = requests.get(img_src)
+            r = requests.get(img_src, verify=False)
         except requests.exceptions.RequestException as e:
             self.error_message("Couldn't get image.\n\n{0}".format(e))
             return
