@@ -9,7 +9,7 @@
         <!-- writer menu -->
         <node oor:name="M1" oor:op="replace">
           <prop oor:name="MergePoint">
-            <value>.uno:EditMenu\.uno:Paste</value>
+            <value>.uno:InsertMenu\.uno:GraphicMenu\.uno:InsertGraphic</value>
           </prop>
           <prop oor:name="MergeCommand">
             <value>AddAfter</value>
@@ -26,7 +26,7 @@
                 <value>service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
-                <value xml:lang="en">Add image from elog.io</value>
+                <value xml:lang="en">From elog.io...</value>
               </prop>
               <prop oor:name="Context" oor:type="xs:string">
                 <value>com.sun.star.text.TextDocument</value>
@@ -37,7 +37,7 @@
         <!-- impress menu -->
         <node oor:name="M2" oor:op="replace">
           <prop oor:name="MergePoint">
-            <value>.uno:EditMenu\.uno:Paste</value>
+            <value>.uno:InsertMenu\.uno:GraphicMenu\.uno:InsertGraphic</value>
           </prop>
           <prop oor:name="MergeCommand">
             <value>AddAfter</value>
@@ -54,7 +54,7 @@
                 <value>service:se.commonsmachinery.pwc.PasteWithCreditJob?execute</value>
               </prop>
               <prop oor:name="Title">
-                <value xml:lang="en">Add image from elog.io</value>
+                <value xml:lang="en">From elog.io...</value>
               </prop>
               <prop oor:name="Context" oor:type="xs:string">
                 <value>com.sun.star.presentation.PresentationDocument</value>
