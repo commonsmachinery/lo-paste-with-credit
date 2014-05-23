@@ -455,34 +455,40 @@ class InsertCreditsJob(unohelper.Base, XJobExecutor):
                 except NoSuchElementException:
                     pass
 
-        # create a TextShape with credits on the current page
-        page = controller.getCurrentPage()
-        shape = model.createInstance("com.sun.star.drawing.TextShape")
-        shape.TextAutoGrowHeight = True
-        shape.TextAutoGrowWidth = True
+        undo_manager = model.getUndoManager()
+        undo_manager.enterUndoContext("Insert credits")
 
-        page.add(shape)
+        try:
+            # create a TextShape with credits on the current page
+            page = controller.getCurrentPage()
+            shape = model.createInstance("com.sun.star.drawing.TextShape")
+            shape.TextAutoGrowHeight = True
+            shape.TextAutoGrowWidth = True
 
-        text = shape.Text
-        cursor = text.createTextCursor()
-        text.insertString(cursor, "This presentation includes the following works:", 0)
-        text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
-        text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
-        cursor.gotoEnd(False)
+            page.add(shape)
 
-        for credit in credits:
-            # in Impress cursor seems to support com.sun.star.style.CharacterProperties
-            # but trying to set HyperLinkURL property raises an UnknownPropertyException
-            # so let's just disable hyperlinks for now
-            tf = LOCreditFormatter(text, cursor, hyperlinks=False)
-            credit.format(tf, source_depth=0)
+            text = shape.Text
+            cursor = text.createTextCursor()
+            text.insertString(cursor, "This presentation includes the following works:", 0)
             text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
+            text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
+            cursor.gotoEnd(False)
 
-        size = shape.Size
-        shape.setPosition(Point(
-            int((page.Width - size.Width) / 2),
-            int((page.Height - size.Height) / 2))
-        )
+            for credit in credits:
+                # in Impress cursor seems to support com.sun.star.style.CharacterProperties
+                # but trying to set HyperLinkURL property raises an UnknownPropertyException
+                # so let's just disable hyperlinks for now
+                tf = LOCreditFormatter(text, cursor, hyperlinks=False)
+                credit.format(tf, source_depth=0)
+                text.insertControlCharacter(cursor, PARAGRAPH_BREAK, 0)
+
+            size = shape.Size
+            shape.setPosition(Point(
+                int((page.Width - size.Width) / 2),
+                int((page.Height - size.Height) / 2))
+            )
+        finally:
+            undo_manager.leaveUndoContext()
 
 
 class ImageWithMetadataTransferable(unohelper.Base, XTransferable):
@@ -1030,98 +1036,108 @@ class PasteFromCatalogJob(unohelper.Base, XJobExecutor):
         img_size = descriptor.getPropertyValue("SizePixel")
 
         if model.supportsService("com.sun.star.text.TextDocument"):
-            # Metadata is only supported in text documents
-            metadata = Metadata(self.ctx, model)
+            undo_manager = model.getUndoManager()
+            undo_manager.enterUndoContext("Add image from elog.io")
+            try:
+                # Metadata is only supported in text documents
+                metadata = Metadata(self.ctx, model)
 
-            # create a frame to hold the image with caption
-            text_frame = model.createInstance("com.sun.star.text.TextFrame")
-            text_frame.setSize(Size(15000,400))
-            text_frame.setPropertyValue("AnchorType", AT_PARAGRAPH)
+                # create a frame to hold the image with caption
+                text_frame = model.createInstance("com.sun.star.text.TextFrame")
+                text_frame.setSize(Size(15000,400))
+                text_frame.setPropertyValue("AnchorType", AT_PARAGRAPH)
 
-            # duplicate current cursor
-            view_cursor = controller.getViewCursor()
-            cursor = view_cursor.getText().createTextCursorByRange(view_cursor)
-            cursor.gotoStartOfSentence(False)
-            cursor.gotoEndOfSentence(True)
+                # duplicate current cursor
+                view_cursor = controller.getViewCursor()
+                cursor = view_cursor.getText().createTextCursorByRange(view_cursor)
+                cursor.gotoStartOfSentence(False)
+                cursor.gotoEndOfSentence(True)
 
-            # insert text frame
-            text = model.Text
-            text.insertTextContent(cursor, text_frame, 0)
-            frame_text = text_frame.getText()
+                # insert text frame
+                text = model.Text
+                text.insertTextContent(cursor, text_frame, 0)
+                frame_text = text_frame.getText()
 
-            cursor = frame_text.createTextCursor()
+                cursor = frame_text.createTextCursor()
 
-            # Add a <text:bookmark> tag to serve as anchor for the RDF
-            # and give us a subject URI.  Ideally, we would get this
-            # from the image but that isn't possible with current
-            # APIs.
+                # Add a <text:bookmark> tag to serve as anchor for the RDF
+                # and give us a subject URI.  Ideally, we would get this
+                # from the image but that isn't possible with current
+                # APIs.
 
-            bookmark = model.createInstance("com.sun.star.text.Bookmark")
-            frame_text.insertTextContent(cursor, bookmark, False)
-            bookmark.ensureMetadataReference()
-            bookmark.setName(BOOKMARK_BASE_NAME + bookmark.LocalName)
-            cursor.gotoEnd(False)
+                bookmark = model.createInstance("com.sun.star.text.Bookmark")
+                frame_text.insertTextContent(cursor, bookmark, False)
+                bookmark.ensureMetadataReference()
+                bookmark.setName(BOOKMARK_BASE_NAME + bookmark.LocalName)
+                cursor.gotoEnd(False)
 
-            # create a TextGraphicObject to hold the image
-            image = model.createInstance("com.sun.star.text.TextGraphicObject")
-            image.setPropertyValue("Graphic", graphic)
-            # hack to enlarge the tiny pasted images
-            image.setPropertyValue("Width", img_size.Width * 20)
-            image.setPropertyValue("Height", img_size.Height * 20)
-            image.setName(bookmark.getName())
+                # create a TextGraphicObject to hold the image
+                image = model.createInstance("com.sun.star.text.TextGraphicObject")
+                image.setPropertyValue("Graphic", graphic)
+                # hack to enlarge the tiny pasted images
+                image.setPropertyValue("Width", img_size.Width * 20)
+                image.setPropertyValue("Height", img_size.Height * 20)
+                image.setName(bookmark.getName())
 
-            frame_text.insertTextContent(cursor, image, False)
+                frame_text.insertTextContent(cursor, image, False)
 
-            # add the credit as text below the image
-            credit = libcredit.Credit(rdf, subject=resource)
-            credit_writer = LOCreditFormatter(frame_text, cursor, metadata = metadata)
-            credit.format(credit_writer, subject_uri = bookmark.StringValue)
+                # add the credit as text below the image
+                credit = libcredit.Credit(rdf, subject=resource)
+                credit_writer = LOCreditFormatter(frame_text, cursor, metadata = metadata)
+                credit.format(credit_writer, subject_uri = bookmark.StringValue)
 
-            # scale the image to fit the frame
-            image.setPropertyValue("RelativeWidth", 100)
-            #image.setPropertyValue("RelativeHeight", 100)
-            image.setPropertyValue("IsSyncHeightToWidth", True)
+                # scale the image to fit the frame
+                image.setPropertyValue("RelativeWidth", 100)
+                #image.setPropertyValue("RelativeHeight", 100)
+                image.setPropertyValue("IsSyncHeightToWidth", True)
 
-            # set image title (no sources)
-            credit_writer = libcredit.TextCreditFormatter()
-            credit.format(credit_writer, source_depth=0)
-            image.setPropertyValue("Title", credit_writer.get_text())
+                # set image title (no sources)
+                credit_writer = libcredit.TextCreditFormatter()
+                credit.format(credit_writer, source_depth=0)
+                image.setPropertyValue("Title", credit_writer.get_text())
 
-            # set image title (credit with sources)
-            credit_writer = libcredit.TextCreditFormatter()
-            credit.format(credit_writer)
-            image.setPropertyValue("Description", credit_writer.get_text())
+                # set image title (credit with sources)
+                credit_writer = libcredit.TextCreditFormatter()
+                credit.format(credit_writer)
+                image.setPropertyValue("Description", credit_writer.get_text())
 
-            # DEBUG:
-            # metadata.dump_graph()
+                # DEBUG:
+                # metadata.dump_graph()
+            finally:
+                undo_manager.leaveUndoContext()
 
         elif model.supportsService("com.sun.star.presentation.PresentationDocument"):
-            page = controller.getCurrentPage()
+            undo_manager = model.getUndoManager()
+            undo_manager.enterUndoContext("Add image from elog.io")
+            try:
+                page = controller.getCurrentPage()
 
-            # begin pasting
-            shape = model.createInstance("com.sun.star.drawing.GraphicObjectShape")
-            shape.Graphic = graphic
-            shape.setSize(Size(img_size.Width * 20, img_size.Height * 20))
+                # begin pasting
+                shape = model.createInstance("com.sun.star.drawing.GraphicObjectShape")
+                shape.Graphic = graphic
+                shape.setSize(Size(img_size.Width * 20, img_size.Height * 20))
 
-            page.add(shape)
+                page.add(shape)
 
-            attributes = shape.UserDefinedAttributes
+                attributes = shape.UserDefinedAttributes
 
-            attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
-            attr.Value = rdf
-            attributes.insertByName("cm-metadata", attr)
+                attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
+                attr.Value = rdf
+                attributes.insertByName("cm-metadata", attr)
 
-            attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
-            attr.Value = resource
-            attributes.insertByName("cm-subject", attr)
+                attr = uno.createUnoStruct("com.sun.star.xml.AttributeData")
+                attr.Value = resource
+                attributes.insertByName("cm-subject", attr)
 
-            shape.UserDefinedAttributes = attributes
+                shape.UserDefinedAttributes = attributes
 
-            size = shape.Size
-            shape.setPosition(Point(
-                int((page.Width - size.Width) / 2),
-                int((page.Height - size.Height) / 2))
-            )
+                size = shape.Size
+                shape.setPosition(Point(
+                    int((page.Width - size.Width) / 2),
+                    int((page.Height - size.Height) / 2))
+                )
+            finally:
+                undo_manager.leaveUndoContext()
         return # add_source
 
 g_ImplementationHelper = unohelper.ImplementationHelper()
